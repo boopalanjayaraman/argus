@@ -641,12 +641,13 @@ body{margin:0;background:#0A0B10}
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
-const BLOB = (id) => '/_blob/' + id;
+// Design handoff: every colour, type size, spacing value, radius and component style lives in
+// ds/argus/components/bundle.css, not in inline styles. Tokens: ds/argus/tokens.json. Rules of use: ds/argus/README.md.
 const IMG = {
-  video: BLOB('dfb7afed5e4911f33b630078aee90ba8'), cad: BLOB('27eb1fb0b3044c82e23e2ffd10ff5ad6'),
-  scan: BLOB('7b481d9787e8e3b8e6aa9f9933d789dd'), partial: BLOB('a60a4fc88ba093357a868f7826f4787b')
+  video: './assets/dfb7afed5e4911f33b630078aee90ba8.jpg', cad: './assets/27eb1fb0b3044c82e23e2ffd10ff5ad6.svg',
+  scan: './assets/7b481d9787e8e3b8e6aa9f9933d789dd.svg', partial: './assets/a60a4fc88ba093357a868f7826f4787b.svg'
 };
-const RULES_URL = BLOB('a89b72fbef06804399486a49330177b4');
+const RULES_URL = './assets/a89b72fbef06804399486a49330177b4.json';
 const ICON = {
   search: 'M21 21l-4.3-4.3M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z',
   upload: 'M12 16V4M7 9l5-5 5 5M4 20h16',
@@ -660,12 +661,12 @@ const ICON = {
 };
 const COLORS = { pass: '#4BE0A0', warn: '#FFB547', fail: '#FF7468', info: '#79C7FF', none: '#8D93A8', accent: '#A594FF' };
 const PHOTOS = [
-  { at: 7.2, key: 'ff', name: 'shot_02_front_flange.jpg', label: 'Front flange', src: BLOB('e5e292a2f0336137b34811d895a3250d') },
-  { at: 12, key: 'bonnet', name: 'shot_03_bonnet.jpg', label: 'Bonnet', src: BLOB('3e27f1f864e33b78e03ac4d368a0d595') },
-  { at: 16.8, key: 'plate', name: 'shot_04_body_nameplate.jpg', label: 'Body', src: BLOB('59a45af86756249882b1bf8ded33c16b') },
-  { at: 21.6, key: 'act', name: 'shot_05_actuator.jpg', label: 'Actuator', src: BLOB('a23692111ef1441782462469496c8765') },
-  { at: 26.4, key: 'of', name: 'shot_06_other_flange.jpg', label: 'Other flange', src: BLOB('674e2db9c31b948cfacb50ce02c6c346') },
-  { at: 31.2, key: 'link', name: 'shot_07_linkage.jpg', label: 'Linkage', src: BLOB('9256c1124af03570fabfafae2b823bd1') }
+  { at: 7.2, key: 'ff', name: 'shot_02_front_flange.jpg', label: 'Front flange', src: './assets/e5e292a2f0336137b34811d895a3250d.jpg' },
+  { at: 12, key: 'bonnet', name: 'shot_03_bonnet.jpg', label: 'Bonnet', src: './assets/3e27f1f864e33b78e03ac4d368a0d595.jpg' },
+  { at: 16.8, key: 'plate', name: 'shot_04_body_nameplate.jpg', label: 'Body', src: './assets/59a45af86756249882b1bf8ded33c16b.jpg' },
+  { at: 21.6, key: 'act', name: 'shot_05_actuator.jpg', label: 'Actuator', src: './assets/a23692111ef1441782462469496c8765.jpg' },
+  { at: 26.4, key: 'of', name: 'shot_06_other_flange.jpg', label: 'Other flange', src: './assets/674e2db9c31b948cfacb50ce02c6c346.jpg' },
+  { at: 31.2, key: 'link', name: 'shot_07_linkage.jpg', label: 'Linkage', src: './assets/9256c1124af03570fabfafae2b823bd1.jpg' }
 ];
 const CHECKS = [
   { id: 'c1', at: 9.0, status: 'PASS', title: 'Front flange bolt pattern matches CAD', caption: 'Bolt count and spacing from the scan agree with the reference model.', rule: '4.5', excerpt: 'Correct number, dia, PCD. Straddle vertical centreline', ref: 'ASME B16.5 / B16.47', rationale: 'Registered scan points compared with the CAD bolt circle.', evidence: 'chunk_0001.ply · shot_02_front_flange.jpg', photo: 'ff', mark: [18, 72, 'Front flange'] },
