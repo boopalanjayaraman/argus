@@ -7,6 +7,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { storageMode, putObjectIfConfigured } from './storage.js';
 import { mongoStore } from './db.js';
+import { logger } from './logger.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const DATA = path.join(root, 'data');
@@ -74,6 +75,8 @@ function dossierHtml(insp: any, partial: boolean) {
 }
 
 export async function buildServer() {
+  await logger.init();
+  logger.info('argus api starting', { cloudLogging: logger.cloudEnabled });
   if (process.env.MONGODB_URI) {
     try {
       await mongoStore.connect();
@@ -96,6 +99,7 @@ export async function buildServer() {
     if (body.model_id && !model) return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'Unknown model_id' } });
     const insp: any = { id: `insp-${Date.now().toString(36)}`, name, model_id: model.model_id, cadRevision: model.revision, cadSha256: model.sha256, lifecycleStatus: 'WAITING', outcome: 'PENDING', createdAt: new Date().toISOString(), counts: { evidence: 0, video: 0, photo: 0, pointcloud: 0 }, producerComplete: false };
     db.inspections.push(insp); emit(db, insp.id, 'inspection.created', {}); saveDB(db);
+    logger.info('inspection.created', { sessionId: insp.id, model_id: insp.model_id });
     return reply.code(201).send(insp);
   });
   app.get('/api/v1/inspections', async (req: any) => {
@@ -141,6 +145,7 @@ export async function buildServer() {
     await putObjectIfConfigured(`evidence/${insp.id}/${evidenceId}-${filename}`, buf).catch(() => null);
     const ev = { evidenceId, sessionId: insp.id, eventId: metadata.eventId, sourceId: metadata.sourceId, sequence: metadata.sequence, relativeTimeMs: metadata.relativeTimeMs, mediaType, synthetic: !!metadata.synthetic, units: metadata.units, coordinateFrame: metadata.coordinateFrame, filename, size: buf.length, sha256, at: new Date().toISOString(), processingStatus: 'queued' };
     db.evidence.push(ev); emit(db, insp.id, 'evidence.received', { evidenceId, mediaType }); analyze(insp, ev); refresh(insp); saveDB(db);
+    logger.info('evidence.received', { sessionId: insp.id, evidenceId, mediaType, eventId: metadata.eventId, size: buf.length });
     return reply.code(202).send({ evidenceId, accepted: true, processingStatus: 'queued' });
   };
   app.post('/api/v1/inspections/:id/video', upload('video'));

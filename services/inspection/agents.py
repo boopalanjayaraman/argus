@@ -34,6 +34,11 @@ class InspectionContext:
     def record(self, agent: str, event: str, detail: str = "") -> None:
         self.log.append({"sessionId": self.session_id, "agent": agent, "event": event,
                          "detail": detail, "at": time.time()})
+        try:
+            import cloud_logging
+            cloud_logging.info(f"agent {event}", service=agent, sessionId=self.session_id, detail=detail)
+        except Exception:
+            pass
 
 
 class SubAgent:

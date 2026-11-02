@@ -3,3 +3,4 @@ open3d
 fastapi
 uvicorn
 pytest
+google-cloud-logging

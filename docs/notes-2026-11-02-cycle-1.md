@@ -194,3 +194,18 @@ against an in-memory Mongo: session created via the API appeared in the
 inspections collection with correct indexes present. G-01 Mongo half is
 code-complete and tested; closing it fully still needs a real Atlas URI in
 .env verified once. GCS byte upload remains env-gated in storage.ts.
+
+## Update — 2026-11-03 · Cycle 8 (Cloud Logging + Docker deployment)
+
+Google Cloud Logging: Node logger (apps/api/src/logger.ts) and Python
+cloud_logging.py write structured entries with service + sessionId labels
+when GCP_PROJECT_ID is set (.env.example documents GCP_PROJECT_ID,
+GOOGLE_CLOUD_PROJECT, GCP_LOG_NAME, LOG_LEVEL, SERVICE_NAME, agent URLs);
+locally they fall back to JSON lines on stdout. Env-gated, server-side only.
+Docker: Dockerfile.api, Dockerfile.inspection (orchestrator + the three
+sub-agent containers), docker-compose.yml for Argus (mongo, api :8000,
+orchestrator :8100, video :8101, image :8102, pointcloud :8103) and a
+standalone Simulator image/compose (:4173). Verified: both compose files
+validate, all images build, Argus stack comes up healthy (api health shows
+mongo configured), simulator container serves 200. Cloud Logging itself
+verifies once GCP_PROJECT_ID + credentials are filled in .env.

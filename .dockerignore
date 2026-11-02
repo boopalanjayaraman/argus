@@ -1,0 +1,9 @@
+node_modules
+dist
+data
+.git
+.pytest_cache
+__pycache__
+services/inspection/.venv
+docs
+*.md
