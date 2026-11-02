@@ -23,6 +23,23 @@ Out of scope: finding generation (PRD-07), dossier (PRD-08).
 - [ ] Simulator send populates all panes + timeline in real time; reconnect mid-stream reconciles without duplicates.
 - [ ] Chunk count and coverage never conflated; empty states truthful.
 
+## References
+
+- Spec: [Argus_Spec.md](../specs/Argus_Spec.md) §4 · Tech: [Argus_Tech_Stack.md](../architecture/Argus_Tech_Stack.md) §§5,7 · Agentic: [Argus_Agentic_Architecture.md](../architecture/Argus_Agentic_Architecture.md) §3
+- UX: [Main.dc.html](../ux/Argus%20click-through-html/Main.dc.html) session artboard (2×2 grid, timeline, right rail) + `bundle.css`; replicate values, don't ship markup.
+
+## Test Plan (write before implementation — tests fail first)
+
+- Unit: event reducer dedupes by `evidenceId/eventSeq`; chunk count ≠ coverage in view model; unvalidated `cadAnchor` renders no CAD marker.
+- Contract: SSE emits persisted events in monotonic order; `Last-Event-ID` reconnect + snapshot refetch yields no duplicates/placeholders.
+- UI (RTL/Playwright): Waiting empties truthful; receipt updates video/photo/point panes before inference; receipt activity never rendered as verdict; no “run simulated feed” control.
+- Negative: SSE drop mid-stream recovers; closed session renders read-only.
+
+## Verification (after implementation)
+
+- [ ] Run this PRD's full test list + Acceptance above.
+- [ ] Playwright with Simulator: send → panes/timeline populate; kill/reconnect SSE mid-stream. No test red/skipped.
+
 ## Review gate
 
 Reply `go PRD-05` to implement, or edit this file first.

@@ -22,6 +22,23 @@ Out of scope: acoustic/NDT/robotics, model training, dossier rendering (PRD-08).
 - [ ] One real finding traces media → observation → rule gate → pinned quote in UI.
 - [ ] Model timeout/geometry-without-registration demonstrably yields `INSUFFICIENT_EVIDENCE`, not PASS.
 
+## References
+
+- Spec: [Argus_Spec.md](../specs/Argus_Spec.md) §9 · Tech: [Argus_Tech_Stack.md](../architecture/Argus_Tech_Stack.md) §§2,7,9 · Agentic: [Argus_Agentic_Architecture.md](../architecture/Argus_Agentic_Architecture.md) §§2,5–6
+- UX: findings feed in [Main.dc.html](../ux/Argus%20click-through-html/Main.dc.html); replicate states, don't ship markup. Models: Meta docs linked in Tech Stack §2.
+
+## Test Plan (write before implementation — tests fail first)
+
+- Unit (pytest): Pydantic observation schemas reject free-text citation/threshold; correlator keeps contradictory observations; gate: hairline→`WARNING`, unregistered scan→`INSUFFICIENT_EVIDENCE`, unused flange holes ≠ missing fastener.
+- Contract: job per `evidenceId` idempotent (re-run = one finding revision chain); Meta timeout/retry-exhausted → `NOT_INSPECTED/INSUFFICIENT_EVIDENCE`, never PASS; versions/call IDs persisted.
+- Integration (mocked Meta/SAM): real photo fixture → observation → finding with pinned quote + evidence IDs; SAM mask never yields verdict.
+- Negative: occluded region, missing units, `cadAnchor` unmapped → no PASS, no CAD marker.
+
+## Verification (after implementation)
+
+- [ ] Run this PRD's full test list (pytest + Vitest) + Acceptance above; one live Meta smoke test recorded.
+- [ ] Manual: trace one finding media→observation→gate→quote in UI. No test red/skipped.
+
 ## Review gate
 
 Reply `go PRD-07` to implement, or edit this file first.

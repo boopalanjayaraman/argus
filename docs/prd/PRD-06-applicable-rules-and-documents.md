@@ -22,6 +22,23 @@ Out of scope: live rule evaluation (PRD-07), dossier generation (PRD-08).
 - [ ] Cascade counts computed from real records; each rule's Why + pinned quote opens correctly.
 - [ ] Documents totals equal stored assets (e.g. evidence + references + dossier).
 
+## References
+
+- Spec: [Argus_Spec.md](../specs/Argus_Spec.md) §§5–6 · Tech: [Argus_Tech_Stack.md](../architecture/Argus_Tech_Stack.md) §6 · Agentic: [Argus_Agentic_Architecture.md](../architecture/Argus_Agentic_Architecture.md) §§4,8
+- UX: [Main.dc.html](../ux/Argus%20click-through-html/Main.dc.html) Applicable Rules/Documents tabs + `bundle.css`; replicate values, don't ship markup.
+
+## Test Plan (write before implementation — tests fail first)
+
+- Unit: selector cascade library→type→order on fixtures; `NOT_APPLICABLE` excluded from denominator; every selection carries reason code.
+- Contract: `GET .../rules|documents` counts reconcile with fixture DB/GCS; citations resolve to pinned snapshot after library edit.
+- UI: tab counts from API (not hardcoded); expand shows quote/page/feature/rationale; Documents sizes/times match stored bytes.
+- Negative: rule with no modality evidence stays `NOT_INSPECTED`; download of unknown doc → `404` error state.
+
+## Verification (after implementation)
+
+- [ ] Run this PRD's full test list + Acceptance above.
+- [ ] Manual: change library rule, reopen closed session — pinned quote unchanged. No test red/skipped.
+
 ## Review gate
 
 Reply `go PRD-06` to implement, or edit this file first.

@@ -25,6 +25,23 @@ Out of scope: PDF export, QMS/ERP, approval workflows.
 - [ ] Full + partial (mid-stream terminate) dossiers generate, persist, and reopen read-only.
 - [ ] Reports filters/View/Download work; post-close Simulator send stops with Not sent rows.
 
+## References
+
+- Spec: [Argus_Spec.md](../specs/Argus_Spec.md) §§4.5–4.6,8,10 · Tech: [Argus_Tech_Stack.md](../architecture/Argus_Tech_Stack.md) §§6–8 · Agentic: [Argus_Agentic_Architecture.md](../architecture/Argus_Agentic_Architecture.md) §7
+- UX: [Main.dc.html](../ux/Argus%20click-through-html/Main.dc.html) closed-session/Dossier/Reports + `bundle.css`; replicate values, don't ship markup.
+
+## Test Plan (write before implementation — tests fail first)
+
+- Unit: outcome aggregation matrix — FAIL dominates; WARNING+missing→`INCONCLUSIVE`; PASS only all-required-pass; terminated→`INCONCLUSIVE` with FAIL retained.
+- Contract: `close` drains or records incomplete on `CLOSE_DRAIN_TIMEOUT_MS`; `terminate` cancels promptly; post-seal upload `409`; dossier render idempotent from snapshot.
+- UI/E2E: full dossier (End) + partial dossier (mid-stream Terminate); Reports filters/View/Download only persisted dossiers; closed view read-only.
+- Negative: dossier generation failure → error/retry state, session stays truthfully `FINALIZING`/error, never fake `COMPLETED`.
+
+## Verification (after implementation)
+
+- [ ] Run this PRD's full test list + Acceptance above.
+- [ ] Playwright both walkthroughs (Spec §12 + terminate variant) with Simulator. No test red/skipped.
+
 ## Review gate
 
 Reply `go PRD-08` to implement, or edit this file first.

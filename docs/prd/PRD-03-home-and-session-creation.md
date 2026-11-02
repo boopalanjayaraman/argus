@@ -22,6 +22,23 @@ Out of scope: evidence upload UI (PRD-05 shell; ingestion in PRD-04), closure (P
 - [ ] Create with name only and with order upload; both land on Waiting with correct CAD.
 - [ ] Filters/counts/search reflect persisted sessions after restart.
 
+## References
+
+- Spec: [Argus_Spec.md](../specs/Argus_Spec.md) §3 · Tech: [Argus_Tech_Stack.md](../architecture/Argus_Tech_Stack.md) §4 · Agentic: session pinning §4
+- UX: [Main.dc.html](../ux/Argus%20click-through-html/Main.dc.html) Home artboard + `bundle.css`; replicate values, don't ship markup.
+
+## Test Plan (write before implementation — tests fail first)
+
+- Unit: create validation — empty name disables Start; unknown `model_id` → `400`; client-supplied CAD path rejected.
+- Contract: `POST/GET /api/v1/inspections` — create pins `model_id+revision+sha256+snapshotId`; list search/filter/counts computed from fixtures.
+- UI: CAD selector shows `display_name`, submits `model_id`; order upload accepts PDF/DOCX/XLSX, oversize → `413`.
+- Negative: no-upload create uses disclosed demo work order; editing library after create does not mutate session snapshot; persistence across restart.
+
+## Verification (after implementation)
+
+- [ ] Run this PRD's full test list + Acceptance above.
+- [ ] Playwright: create (with/without upload) → Waiting with selected CAD. No test red/skipped.
+
 ## Review gate
 
 Reply `go PRD-03` to implement, or edit this file first.

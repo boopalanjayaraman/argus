@@ -23,6 +23,23 @@ Out of scope: inference (PRD-07), SSE fan-out details (PRD-05).
 - [ ] Curl/Simulator sends real MP4/JPG/PLY; evidence listed with real size/hash/source.
 - [ ] Duplicate `eventId` does not duplicate evidence; post-close upload gets `409`.
 
+## References
+
+- Spec: [Argus_Spec.md](../specs/Argus_Spec.md) §10.3 · Tech: [Argus_Tech_Stack.md](../architecture/Argus_Tech_Stack.md) §5 · Contract twin: Simulator PRD-S03
+- UX: none (API-only); evidence surfaces checked in PRD-05 against [Main.dc.html](../ux/Argus%20click-through-html/Main.dc.html).
+
+## Test Plan (write before implementation — tests fail first)
+
+- Contract (per endpoint video/photos/pointcloud): valid multipart → `202 {evidenceId,accepted,processingStatus:queued}` after store+hash; evidence listed with real size/hash.
+- Idempotency: same `(sessionId,eventId)`+payload → original `202`, one record; same ID conflicting payload → `409`.
+- Negative: bad metadata `400`, unknown session `404`, closed session `409 SESSION_CLOSED` (never `202`), oversize `413`, wrong type `415`; pointcloud without `units/coordinateFrame` → `400`.
+- Ordering: `202` only after bytes retrievable; manual upload keeps true `synthetic` provenance.
+
+## Verification (after implementation)
+
+- [ ] Run this PRD's full test list + Acceptance above; repeat suite against Simulator PRD-S03 mock contract.
+- [ ] Manual curl with real MP4/PNG/PLY from `simulated_data/`. No test red/skipped.
+
 ## Review gate
 
 Reply `go PRD-04` to implement, or edit this file first.

@@ -23,6 +23,23 @@ Out of scope: any feature logic, DB/GCS/Meta wiring beyond config placeholders.
 - [ ] `npm run build` + tests pass; web shows nav + empty Home; API health responds.
 - [ ] No secret in web bundle; no login UI.
 
+## References
+
+- Spec: [Argus_Spec.md](../specs/Argus_Spec.md) (routes/nav §2) · Tech: [Argus_Tech_Stack.md](../architecture/Argus_Tech_Stack.md) §§2–3 · Arch: [Argus_Agentic_Architecture.md](../architecture/Argus_Agentic_Architecture.md) §3
+- UX: [Main.dc.html](../ux/Argus%20click-through-html/Main.dc.html) + `ds/argus/components/bundle.css` — replicate colors/spacing/radii values in Tailwind; never ship mockup markup.
+
+## Test Plan (write before implementation — tests fail first)
+
+- Unit: config loader rejects missing env key with named error; contracts enums reject unknown `lifecycleStatus/outcome/ruleStatus`.
+- Contract: `GET /api/v1/health` returns documented shape; unknown route returns `{error:{code,message}}`.
+- UI (RTL): shell renders nav `Home/Inspection Rules/Reports`, empty states, no login control.
+- Negative: secret env value must not appear in built web bundle (grep build output).
+
+## Verification (after implementation)
+
+- [ ] Run this PRD's full test list + Acceptance above; `npm run build` green.
+- [ ] Playwright smoke: nav renders, health OK. No test red/skipped at sign-off.
+
 ## Review gate
 
 Reply `go PRD-01` to implement, or edit this file first.
