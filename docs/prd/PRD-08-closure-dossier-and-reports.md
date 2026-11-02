@@ -1,6 +1,6 @@
 # PRD-08 — Closure, Dossier & Reports (Argus)
 
-Status: Awaiting review · Source: Spec §§4.5–4.6, 8 · Depends on: PRD-05, PRD-06, PRD-07
+Status: Implemented (v1: Fastify+React, local file storage; Mongo/GCS/Meta adapters pending) · Source: Spec §§4.5–4.6, 8 · Depends on: PRD-05, PRD-06, PRD-07
 
 ## Specs
 

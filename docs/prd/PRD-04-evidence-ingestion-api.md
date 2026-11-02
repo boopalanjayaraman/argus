@@ -1,6 +1,6 @@
 # PRD-04 — Evidence Ingestion API (Argus)
 
-Status: Awaiting review · Source: Spec §10.3 · Tech Stack §5 · Depends on: PRD-01, PRD-03 · **Contract twin: Simulator PRD-S03 must match this exactly.**
+Status: Implemented (v1: Fastify+React, local file storage; Mongo/GCS/Meta adapters pending) · Source: Spec §10.3 · Tech Stack §5 · Depends on: PRD-01, PRD-03 · **Contract twin: Simulator PRD-S03 must match this exactly.**
 
 ## Specs
 

@@ -1,0 +1,10 @@
+{
+ "derived": true,
+ "kind": "cad_reference_point_cloud",
+ "sourceCad": "cvs6000_valve.stl",
+ "sourceCadSha256": "e6920218fbfcaeace2ae87af26de4d389a676cf6f2ff1559647baa6d2aaf69d3",
+ "points": 680000,
+ "units": "mm",
+ "method": "open3d.sample_points_uniformly",
+ "output": "cad_reference.ply"
+}

@@ -1,6 +1,6 @@
 # PRD-03 — Home & Session Creation (Argus)
 
-Status: Awaiting review · Source: Spec §3 · Tech Stack §4 · Depends on: PRD-01, PRD-02
+Status: Implemented (v1: Fastify+React, local file storage; Mongo/GCS/Meta adapters pending) · Source: Spec §3 · Tech Stack §4 · Depends on: PRD-01, PRD-02
 
 ## Specs
 

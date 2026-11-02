@@ -1,0 +1,1 @@
+{ "name": "argus", "private": true, "type": "module", "scripts": { "build": "npm --prefix apps/web run build && npm --prefix apps/api run build", "start": "npm run build && npm --prefix apps/api run start", "test": "npm --prefix apps/api run test && services/inspection/.venv/bin/python -m pytest services/inspection/tests -q" } }

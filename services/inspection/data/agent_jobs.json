@@ -1,0 +1,87 @@
+{
+ "insp-wl-live:img-1": {
+  "sessionId": "insp-wl-live",
+  "evidence": {
+   "mediaType": "photo",
+   "eventId": "img-1",
+   "path": ""
+  },
+  "rule": {
+   "ruleId": "WO-R01",
+   "title": "Nameplate and marking legibility",
+   "section": "1.1",
+   "quote": "Verify stamped nameplate data matches the work order model and serial.",
+   "source": "Demo work order (pinned)",
+   "page": 1,
+   "features": [
+    "nameplate"
+   ],
+   "modalities": [
+    "photo",
+    "video"
+   ],
+   "thresholdMm": null,
+   "applicability": "APPROVED",
+   "model_id": "CVS6000_VALVE"
+  },
+  "state": "DONE",
+  "attempts": 4
+ },
+ "insp-wl-live:ply-1": {
+  "sessionId": "insp-wl-live",
+  "evidence": {
+   "mediaType": "pointcloud",
+   "eventId": "ply-1",
+   "path": "/nonexistent.ply"
+  },
+  "rule": {
+   "ruleId": "WO-R02",
+   "title": "Flange face condition",
+   "section": "1.2",
+   "quote": "Examine flange faces for visible damage or indications; report indications for review.",
+   "source": "Demo work order (pinned)",
+   "page": 1,
+   "features": [
+    "inlet_flange_face",
+    "outlet_flange_face"
+   ],
+   "modalities": [
+    "photo",
+    "pointcloud"
+   ],
+   "thresholdMm": null,
+   "applicability": "APPROVED",
+   "model_id": "CVS6000_VALVE"
+  },
+  "state": "DONE",
+  "attempts": 2
+ },
+ "insp-wl-live2:img-1": {
+  "sessionId": "insp-wl-live2",
+  "evidence": {
+   "mediaType": "photo",
+   "eventId": "img-1",
+   "path": ""
+  },
+  "rule": {
+   "ruleId": "WO-R01",
+   "title": "Nameplate and marking legibility",
+   "section": "1.1",
+   "quote": "Verify stamped nameplate data matches the work order model and serial.",
+   "source": "Demo work order (pinned)",
+   "page": 1,
+   "features": [
+    "nameplate"
+   ],
+   "modalities": [
+    "photo",
+    "video"
+   ],
+   "thresholdMm": null,
+   "applicability": "APPROVED",
+   "model_id": "CVS6000_VALVE"
+  },
+  "state": "DONE",
+  "attempts": 4
+ }
+}

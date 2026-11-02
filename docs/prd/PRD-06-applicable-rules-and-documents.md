@@ -1,6 +1,6 @@
 # PRD-06 — Applicable Rules & Documents (Argus)
 
-Status: Awaiting review · Source: Spec §§5–6 · Depends on: PRD-02, PRD-03, PRD-05
+Status: Implemented (v1: Fastify+React, local file storage; Mongo/GCS/Meta adapters pending) · Source: Spec §§5–6 · Depends on: PRD-02, PRD-03, PRD-05
 
 ## Specs
 

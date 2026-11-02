@@ -1,6 +1,6 @@
 # PRD-02 — Reference Pack & Rule Library (Argus)
 
-Status: Awaiting review · Source: Spec §§5,7,11 · Tech Stack §6 · Depends on: PRD-01
+Status: Implemented (v1: Fastify+React, local file storage; Mongo/GCS/Meta adapters pending) · Source: Spec §§5,7,11 · Tech Stack §6 · Depends on: PRD-01
 
 ## Specs
 

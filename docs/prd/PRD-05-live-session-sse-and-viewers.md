@@ -1,6 +1,6 @@
 # PRD-05 — Live Session: SSE & Viewers (Argus)
 
-Status: Awaiting review · Source: Spec §4 · Tech Stack §§5,7 · Depends on: PRD-04
+Status: Implemented (v1: Fastify+React, local file storage; Mongo/GCS/Meta adapters pending) · Source: Spec §4 · Tech Stack §§5,7 · Depends on: PRD-04
 
 ## Specs
 
