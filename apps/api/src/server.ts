@@ -6,6 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { storageMode, putObjectIfConfigured } from './storage.js';
+import { mongoStore } from './db.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const DATA = path.join(root, 'data');
@@ -19,7 +20,14 @@ const rulePack = JSON.parse(fs.readFileSync(path.join(root, 'reference-data/cvs6
 
 interface DB { inspections: any[]; evidence: any[]; findings: any[]; events: any[]; dossiers: any[] }
 function loadDB(): DB { try { return JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { return { inspections: [], evidence: [], findings: [], events: [], dossiers: [] }; } }
-function saveDB(db: DB) { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); }
+let mongoSyncTimer: any = null;
+function saveDB(db: DB) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+  if (mongoStore.connected) {
+    clearTimeout(mongoSyncTimer);
+    mongoSyncTimer = setTimeout(() => { mongoStore.syncState(db as any).catch(() => {}); }, 200);
+  }
+}
 let db = loadDB();
 const listeners = new Map<string, Set<any>>();
 function emit(db: DB, sessionId: string, type: string, payload: any = {}) {
@@ -66,6 +74,14 @@ function dossierHtml(insp: any, partial: boolean) {
 }
 
 export async function buildServer() {
+  if (process.env.MONGODB_URI) {
+    try {
+      await mongoStore.connect();
+      const fromMongo = await mongoStore.loadState();
+      if (fromMongo) { db = fromMongo as DB; fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); }
+      console.log('[argus] MongoDB connected; collections synced');
+    } catch (e: any) { console.error('[argus] MongoDB connect failed, using local store:', e?.message || e); }
+  }
   const app = Fastify();
   await app.register(multipart, { limits: { fileSize: 200 * 1024 * 1024 } });
   app.get('/api/v1/health', async () => ({ ok: true, storage: storageMode }));

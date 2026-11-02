@@ -178,3 +178,19 @@ three agent services) returns rule-tagged observations for a photo against
 WO-R01..WO-R04. pytest 17/17. The initial live call exposed stale agent
 processes running pre-envelope code — restarted all three services.
 Remaining seam: the Node API does not yet call /analyze-evidence on upload.
+
+## Update — 2026-11-03 · Cycle 7 (MongoDB models + integration)
+
+`apps/api/src/models.ts` defines typed docs for inspections, evidence,
+findings, events, dossiers, ruleLibrary (spec field separation preserved).
+`apps/api/src/db.ts` (MongoStore) connects when MONGODB_URI is set, creates
+indexes — unique (sessionId,eventId) on evidence, (sessionId,eventSeq) on
+events, id/session indexes — loads state from Mongo at startup when present,
+and debounced-syncs the API working state into the collections on every
+save. Without MONGODB_URI the local-file store remains the dev default.
+Verified: vitest 4/4 including mongodb-memory-server tests (duplicate
+(sessionId,eventId) rejected; sync/load round-trip), and a live smoke run
+against an in-memory Mongo: session created via the API appeared in the
+inspections collection with correct indexes present. G-01 Mongo half is
+code-complete and tested; closing it fully still needs a real Atlas URI in
+.env verified once. GCS byte upload remains env-gated in storage.ts.
