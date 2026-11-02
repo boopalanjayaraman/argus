@@ -1,0 +1,1135 @@
+<!doctype html>
+<meta charset="utf-8"><style data-dc-design-system-vars>@layer{:root{--bg:#0a0b10;--surface-1:#12141c;--surface-2:#1a1d28;--surface-3:#252936;--line:#2a2e3c;--line-strong:#454b5e;--text:#f3f4f9;--text-2:#b3b8c9;--text-3:#8d93a8;--accent:#a594ff;--accent-soft:#231f45;--on-primary:#0a0b10;--pass:#4be0a0;--pass-soft:#10291f;--warn:#ffb547;--warn-soft:#2e2210;--fail:#ff7468;--fail-soft:#33171a;--info:#79c7ff;--info-soft:#122636;--paper:#f7f7fa;--paper-line:#d9dbe3;--paper-ink:#12141c;--paper-muted:#4d5365;--space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:24px;--space-6:32px;--radius-sm:6px;--radius-md:8px;--radius-lg:8px;--radius-chip:6px;--font-sans:"Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;--font-mono:"JetBrains Mono", ui-monospace, Menlo, monospace;--text-display:600 32px/1.15 var(--font-sans);--text-title:600 18px/1.3 var(--font-sans);--text-label:600 14px/1.35 var(--font-sans);--text-body:400 14px/1.5 var(--font-sans);--text-small:400 13px/1.45 var(--font-sans);--text-micro:500 12px/1.4 var(--font-sans);--text-data:400 12.5px/1.5 var(--font-mono);}}</style>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Argus</title>
+<script src="./vendor/react.js"></script>
+<script src="./vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="ds/argus/components/bundle.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+@font-face{font-family:"Plus Jakarta Sans";src:url("./assets/8aea221eefef8bf9b0cc09584a58cbc0.woff2") format("woff2");font-weight:200 800;font-display:swap}
+@font-face{font-family:"JetBrains Mono";src:url("./assets/9c72b1b66e4186aa4069ee86a7121f97.woff2") format("woff2");font-weight:100 800;font-display:swap}
+body{margin:0;background:#0A0B10}
+</style>
+</helmet>
+<div class="ar-app">
+
+  <header class="ar-top">
+    <button type="button" class="ar-logo" onClick="{{goHome}}" aria-label="Argus home">
+      <svg viewBox="0 0 26 26" fill="none" aria-hidden="true"><circle cx="13" cy="13" r="11.5" stroke="#A594FF" stroke-width="1.5"></circle><circle cx="13" cy="13" r="5.5" fill="#A594FF"></circle><circle cx="15" cy="11" r="1.7" fill="#0A0B10"></circle></svg>
+      Argus
+    </button>
+    <nav class="ar-nav" aria-label="Primary">
+      <button type="button" class="ar-navlink" aria-current="{{navHome}}" onClick="{{goHome}}">Home</button>
+      <button type="button" class="ar-navlink" aria-current="{{navRules}}" onClick="{{goRules}}">Inspection Rules</button>
+      <button type="button" class="ar-navlink" aria-current="{{navReports}}" onClick="{{goReports}}">Reports</button>
+    </nav>
+  </header>
+
+  <sc-if value="{{isHome}}" hint-placeholder-val="{{ true }}">
+    <div class="ar-scroll"><main class="ar-page">
+      <div>
+        <h1 class="ar-h1">Autonomous Industrial Inspection</h1>
+        <p class="ar-lead">Live video, photographs and laser scans, checked against approved CAD and inspection rules.</p>
+      </div>
+      <div class="ar-split">
+        <section class="ar-card ar-grow" aria-labelledby="ins-heading" style="overflow: hidden">
+          <div class="ar-bar" style="padding: 18px 20px">
+            <h2 id="ins-heading" class="ar-h2">Inspections</h2>
+            <div class="ar-spacer"></div>
+            <div class="ar-search" style="flex: 0 1 260px">
+              <svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.search}}"></path></svg>
+              <label for="home-search" class="ar-sr">Search inspections</label>
+              <input id="home-search" class="ar-input" type="search" placeholder="Search inspections" value="{{homeQ}}" onChange="{{onHomeQ}}">
+            </div>
+          </div>
+          <div class="ar-chips" style="padding: 0 20px 14px">
+            <sc-for list="{{homeChips}}" as="c" hint-placeholder-count="4">
+              <button type="button" class="ar-chip" aria-pressed="{{c.on}}" onClick="{{c.pick}}">{{c.label}} <b>{{c.n}}</b></button>
+            </sc-for>
+          </div>
+          <div class="ar-rows"><div style="min-width: 780px">
+            <div class="ar-rowhead" style="grid-template-columns: minmax(200px, 2fr) 150px 112px 104px minmax(150px, 1.3fr) 16px"><span>Inspection</span><span>Started</span><span>Session</span><span>Outcome</span><span>Findings</span><span></span></div>
+            <sc-for list="{{homeRows}}" as="r" hint-placeholder-count="5">
+              <button type="button" class="ar-row" style="grid-template-columns: minmax(200px, 2fr) 150px 112px 104px minmax(150px, 1.3fr) 16px" onClick="{{r.open}}">
+                <span style="min-width: 0"><span class="ar-h3" style="display: block">{{r.name}}</span><span class="ar-mono ar-micro">{{r.id}}</span></span>
+                <span class="ar-small">{{r.started}}</span>
+                <span><span class="{{r.statusClass}}">{{r.status}}</span></span>
+                <span><span class="{{r.outcomeClass}}">{{r.outcome}}</span></span>
+                <span style="display: flex; flex-direction: column; gap: 5px">
+                  <span class="ar-minibar"><sc-for list="{{r.bar}}" as="b" hint-placeholder-count="2"><span style="flex: {{b.n}} 1 0; background: {{b.c}}"></span></sc-for></span>
+                  <span class="ar-micro">{{r.counts}}</span>
+                </span>
+                <svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true" style="color: #8D93A8"><path d="{{ic.right}}"></path></svg>
+              </button>
+            </sc-for>
+          </div></div>
+          <sc-if value="{{homeEmpty}}" hint-placeholder-val="{{ false }}"><div class="ar-empty"><strong>No inspections match</strong><span>Try another name or clear the filter.</span></div></sc-if>
+        </section>
+
+        <form class="ar-card pad ar-side" style="display: flex; flex-direction: column; gap: 16px" aria-labelledby="start-heading">
+          <h2 id="start-heading" class="ar-h2">Start inspection</h2>
+          <div class="ar-field">
+            <label for="start-name">Inspection name</label>
+            <input id="start-name" class="ar-input" type="text" placeholder="e.g. CVS 6000D — Blue Valve Run" value="{{startName}}" onChange="{{onStartName}}">
+          </div>
+          <div class="ar-field">
+            <span class="ar-label">Customer specification or work order (optional)</span>
+            <sc-if value="{{noStartSpec}}" hint-placeholder-val="{{ true }}">
+              <label for="spec-file" class="ar-drop">
+                <svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.upload}}"></path></svg>
+                <span><strong>Upload specification</strong><span class="ar-small">PDF, Word or Excel</span></span>
+              </label>
+            </sc-if>
+            <sc-if value="{{hasStartSpec}}" hint-placeholder-val="{{ false }}">
+              <div class="ar-filefoot">
+                <svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.file}}"></path></svg>
+                <span style="flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere">{{startSpecName}}<span class="ar-micro" style="display: block">{{startSpecSize}}</span></span>
+                <button type="button" class="ar-btn ghost sm icon-only" aria-label="Remove specification" onClick="{{clearStartSpec}}"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.x}}"></path></svg></button>
+              </div>
+            </sc-if>
+            <input id="spec-file" class="ar-sr" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" onChange="{{onStartSpec}}">
+          </div>
+          <dl class="ar-dl">
+            <dt>Valve type</dt><dd>CVS 6000D</dd>
+            <dt>Rules</dt><dd>Selected from the valve type and this document</dd>
+          </dl>
+          <button type="button" class="ar-btn primary" disabled="{{startDisabled}}" onClick="{{startInspection}}">Start Inspection</button>
+        </form>
+      </div>
+    </main></div>
+  </sc-if>
+
+  <sc-if value="{{isReports}}" hint-placeholder-val="{{ false }}">
+    <div class="ar-scroll"><main class="ar-page">
+      <div>
+        <h1 class="ar-h1">Reports</h1>
+        <p class="ar-lead">Inspection dossiers, generated when an inspection is ended or terminated.</p>
+      </div>
+      <section class="ar-card" aria-label="All reports" style="overflow: hidden">
+        <div class="ar-bar" style="padding: 18px 20px">
+          <div class="ar-chips">
+            <sc-for list="{{repChips}}" as="c" hint-placeholder-count="5">
+              <button type="button" class="ar-chip" aria-pressed="{{c.on}}" onClick="{{c.pick}}">{{c.label}} <b>{{c.n}}</b></button>
+            </sc-for>
+          </div>
+          <div class="ar-spacer"></div>
+          <div class="ar-search" style="flex: 0 1 280px">
+            <svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.search}}"></path></svg>
+            <label for="rep-search" class="ar-sr">Search reports</label>
+            <input id="rep-search" class="ar-input" type="search" placeholder="Search reports" value="{{repQ}}" onChange="{{onRepQ}}">
+          </div>
+        </div>
+        <div class="ar-rows"><div style="min-width: 860px">
+          <div class="ar-rowhead" style="grid-template-columns: minmax(220px, 2fr) 150px 90px 110px minmax(140px, 1fr) 190px"><span>Report</span><span>Closed</span><span>Type</span><span>Outcome</span><span>Findings</span><span></span></div>
+          <sc-for list="{{repRows}}" as="r" hint-placeholder-count="3">
+            <div class="ar-row static" style="grid-template-columns: minmax(220px, 2fr) 150px 90px 110px minmax(140px, 1fr) 190px">
+              <span style="min-width: 0"><span class="ar-h3" style="display: block">{{r.name}}</span><span class="ar-mono ar-micro">{{r.id}}</span></span>
+              <span class="ar-small">{{r.closed}}</span>
+              <span class="ar-small">{{r.type}}</span>
+              <span><span class="{{r.outcomeClass}}">{{r.outcome}}</span></span>
+              <span class="ar-micro">{{r.counts}}</span>
+              <span class="ar-bar" style="justify-content: flex-end; gap: 8px">
+                <button type="button" class="ar-btn secondary sm" onClick="{{r.view}}">View</button>
+                <button type="button" class="ar-btn ghost sm" onClick="{{r.download}}"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.down}}"></path></svg>Download</button>
+              </span>
+            </div>
+          </sc-for>
+        </div></div>
+        <sc-if value="{{repEmpty}}" hint-placeholder-val="{{ false }}"><div class="ar-empty"><strong>No reports match</strong><span>Try another name or clear the filter.</span></div></sc-if>
+      </section>
+    </main></div>
+  </sc-if>
+
+  <sc-if value="{{isRules}}" hint-placeholder-val="{{ false }}">
+    <main class="ar-rules">
+      <header class="ar-rhead"><div class="ar-rwrap">
+        <sc-if value="{{hasBack}}" hint-placeholder-val="{{ false }}"><button type="button" class="ar-link" style="align-self: flex-start" onClick="{{backToInspection}}"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.left}}"></path></svg>Back to {{backName}}</button></sc-if>
+        <div class="ar-bar" style="gap: 10px 12px">
+          <h1 class="ar-h1" style="font-size: 26px; margin-right: 12px">Inspection Rules</h1>
+          <div class="ar-search" style="flex: 1 1 280px">
+            <svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.search}}"></path></svg>
+            <label for="rule-search" class="ar-sr">Search all rules</label>
+            <input id="rule-search" class="ar-input" type="search" placeholder="Search all {{ruleTotal}} rules" value="{{ruleQ}}" onChange="{{onRuleQ}}">
+          </div>
+          <div style="flex: 0 1 176px; min-width: 150px">
+            <label for="rule-type" class="ar-sr">Valve type</label>
+            <select id="rule-type" class="ar-select" value="{{ruleType}}" onChange="{{onRuleType}}">
+              <option value="">All valve types</option>
+              <option>2111</option><option>2114</option><option>2392</option><option>2412</option><option>2417</option><option>3241</option><option>3244</option><option>3245</option><option>3248</option><option>3249</option><option>3251</option><option>3253</option><option>3254</option><option>3255</option><option>3256</option><option>3258</option><option>3281</option><option>3284</option><option>3286</option><option>3347</option><option>3510</option><option>Series 1a</option><option>Series 240/250</option>
+            </select>
+          </div>
+          <div style="flex: 0 1 188px; min-width: 150px">
+            <label for="rule-ev" class="ar-sr">Evidence type</label>
+            <select id="rule-ev" class="ar-select" value="{{ruleEv}}" onChange="{{onRuleEv}}">
+              <option value="">All evidence types</option>
+              <option>Photo or video</option><option>3D scan</option><option>Measurement</option><option>Functional test</option><option>Work order record</option>
+            </select>
+          </div>
+          <sc-if value="{{filtersOn}}" hint-placeholder-val="{{ false }}"><button type="button" class="ar-btn ghost sm" onClick="{{clearRuleFilters}}">Clear</button></sc-if>
+        </div>
+        <nav class="ar-stages" aria-label="Rule stages">
+          <sc-for list="{{ruleStages}}" as="g" hint-placeholder-count="6">
+            <button type="button" class="ar-stagecard" aria-current="{{g.current}}" data-empty="{{g.empty}}" onClick="{{g.pick}}">
+              <span class="ar-h3">{{g.name}}</span>
+              <span class="ar-micro">{{g.line}}</span>
+            </button>
+          </sc-for>
+        </nav>
+      </div></header>
+
+      <div class="ar-rbody">
+        <nav class="ar-toc" aria-label="Sections">
+          <h2 class="ar-h2">{{ruleListTitle}}</h2>
+          <p class="ar-small" style="margin-bottom: 12px">{{ruleListSub}}</p>
+          <sc-for list="{{ruleToc}}" as="t" hint-placeholder-count="6">
+            <button type="button" class="ar-tocitem" aria-current="{{t.current}}" onClick="{{t.pick}}"><span>{{t.name}}</span><b>{{t.n}}</b></button>
+          </sc-for>
+        </nav>
+
+        <div class="ar-rlist" onScroll="{{onRuleScroll}}">
+          <sc-for list="{{ruleSecs}}" as="sec" hint-placeholder-count="3">
+            <section class="ar-rsec" id="{{sec.dom}}" aria-label="{{sec.name}}">
+              <div class="ar-rsec-head">
+                <h3 class="ar-h3" style="font-size: 15px">{{sec.label}}</h3>
+                <span class="ar-micro">{{sec.count}}</span>
+              </div>
+              <sc-if value="{{sec.note}}" hint-placeholder-val="{{ false }}"><p class="ar-rnote">{{sec.note}}</p></sc-if>
+              <sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="5">
+                <article class="ar-rule" id="{{r.dom}}" data-open="{{r.ariaOpen}}" data-nocode="{{sec.nocode}}" data-wide="{{sec.wide}}">
+                  <button type="button" class="ar-rule-head" aria-expanded="{{r.ariaOpen}}" onClick="{{r.toggle}}">
+                    <span class="ar-mono" style="color: var(--accent); padding-top: 1px">{{r.code}}</span>
+                    <span class="ar-h3">{{r.title}}</span>
+                    <span class="ar-rule-line">{{r.line}}</span>
+                    <span class="ar-micro">{{r.evidence}}</span>
+                    <svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true" style="color: #8D93A8; margin-top: 2px"><path d="{{r.chev}}"></path></svg>
+                  </button>
+                  <sc-if value="{{r.open}}" hint-placeholder-val="{{ false }}">
+                    <div class="ar-rule-body">
+                      <div class="ar-rule-main">
+                        <div class="ar-quote" style="white-space: pre-line; font-size: 14px">{{r.text}}</div>
+                        <sc-if value="{{r.hasTable}}" hint-placeholder-val="{{ false }}">
+                          <div class="ar-tablebox"><div class="ar-gridtable" style="grid-template-columns: repeat({{r.cols}}, auto)">
+                            <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="8"><span class="{{c.cls}}">{{c.v}}</span></sc-for>
+                          </div></div>
+                        </sc-if>
+                        <sc-if value="{{r.hasMono}}" hint-placeholder-val="{{ false }}"><div class="ar-pre">{{r.mono}}</div></sc-if>
+                      </div>
+                      <dl class="ar-dl ar-rule-meta">
+                        <sc-if value="{{r.onfail}}" hint-placeholder-val="{{ true }}"><dt>If not met</dt><dd>{{r.onfail}}</dd></sc-if>
+                        <sc-if value="{{r.ref}}" hint-placeholder-val="{{ true }}"><dt>Reference</dt><dd>{{r.ref}}</dd></sc-if>
+                        <dt>Source</dt><dd>{{r.source}}</dd>
+                        <dt>Applies to</dt><dd>{{r.types}}</dd>
+                      </dl>
+                    </div>
+                  </sc-if>
+                </article>
+              </sc-for>
+            </section>
+          </sc-for>
+          <sc-if value="{{ruleListEmpty}}" hint-placeholder-val="{{ false }}">
+            <div class="ar-empty">
+              <strong>{{ruleEmptyTitle}}</strong><span>{{ruleEmptySub}}</span>
+              <sc-if value="{{filtersOn}}" hint-placeholder-val="{{ false }}"><button type="button" class="ar-btn secondary sm" style="margin-top: 8px" onClick="{{clearRuleFilters}}">Clear filters</button></sc-if>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </main>
+  </sc-if>
+
+  <sc-if value="{{isInspection}}" hint-placeholder-val="{{ false }}">
+    <div class="ar-ihead">
+      <button type="button" class="ar-link" style="min-height: 24px; color: var(--text-2); font-weight: 500" onClick="{{goHome}}"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.left}}"></path></svg>Inspections</button>
+      <div class="ar-bar">
+        <h1 class="ar-h2" style="font-size: 22px">{{i.name}}</h1>
+        <span class="{{i.statusClass}}">{{i.status}}</span>
+        <span class="ar-mono ar-micro">{{i.id}}</span>
+        <button type="button" class="ar-btn ghost sm icon-only" aria-label="Copy session ID" onClick="{{copyId}}"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.copy}}"></path></svg></button>
+        <div class="ar-spacer"></div>
+        <sc-if value="{{i.active}}" hint-placeholder-val="{{ true }}">
+          <label for="ev-file" class="ar-btn secondary"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.upload}}"></path></svg>Upload Evidence</label>
+          <input id="ev-file" class="ar-sr" type="file" multiple="" accept=".mp4,.jpg,.jpeg,.png,.ply,.pcd" onChange="{{onEvidence}}">
+          <button type="button" class="{{i.endClass}}" onClick="{{askEnd}}">End Inspection</button>
+          <button type="button" class="ar-btn danger" onClick="{{askTerminate}}">Terminate Now</button>
+        </sc-if>
+      </div>
+      <div class="ar-tabs" role="tablist" aria-label="Inspection sections">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="3">
+          <button type="button" class="ar-tab" role="tab" aria-selected="{{t.on}}" onClick="{{t.pick}}">{{t.label}} <b>{{t.n}}</b></button>
+        </sc-for>
+      </div>
+    </div>
+
+    <sc-if value="{{tabLive}}" hint-placeholder-val="{{ true }}">
+      <div class="{{live.layout}}">
+        <div class="ar-evidence" aria-label="Evidence">
+          <div class="ar-bar" style="flex: none; justify-content: space-between; gap: 8px; min-height: 30px">
+            <h2 class="ar-h3">Evidence <span class="ar-micro" style="margin-left: 4px">{{live.evCount}}</span></h2>
+            <sc-if value="{{live.isClosed}}" hint-placeholder-val="{{ false }}">
+              <button type="button" class="ar-btn ghost sm" style="min-height: 30px" aria-expanded="{{live.evOpen}}" onClick="{{toggleEv}}"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{live.evIcon}}"></path></svg>{{live.evToggle}}</button>
+            </sc-if>
+          </div>
+          <sc-if value="{{live.showEvidence}}" hint-placeholder-val="{{ true }}">
+          <div class="ar-evgrid">
+            <section class="ar-media" aria-label="Video">
+              <span class="ar-media-tag">Video</span><span class="ar-media-meta">{{live.videoMeta}}</span>
+              <sc-if value="{{live.hasVideo}}" hint-placeholder-val="{{ true }}"><img class="fill" src="{{img.video}}" alt="Video frame of a blue control valve" style="object-position: center 30%"></sc-if>
+              <sc-if value="{{live.canReplay}}" hint-placeholder-val="{{ false }}"><button type="button" class="ar-play" aria-label="{{live.playLabel}}" onClick="{{togglePlay}}"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{live.playIcon}}"></path></svg></button></sc-if>
+              <sc-if value="{{live.noVideo}}" hint-placeholder-val="{{ false }}"><div class="ar-media-empty">{{live.videoEmpty}}</div></sc-if>
+            </section>
+            <section class="ar-media" aria-label="3D point cloud" style="background: #07080C">
+              <span class="ar-media-tag">Point cloud</span><span class="ar-media-meta">{{live.scanMeta}}</span>
+              <sc-if value="{{live.hasScan}}" hint-placeholder-val="{{ true }}"><div class="ar-stagebox"><div class="ar-4x3"><img src="{{live.scanSrc}}" alt="Laser scan of the valve"></div></div></sc-if>
+              <sc-if value="{{live.noScan}}" hint-placeholder-val="{{ false }}"><div class="ar-media-empty">{{live.scanEmpty}}</div></sc-if>
+            </section>
+            <section class="ar-media" aria-label="Photographs">
+              <span class="ar-media-tag">Photographs</span><span class="ar-media-meta">{{live.photoMeta}}</span>
+              <div class="ar-photos">
+                <sc-for list="{{live.photos}}" as="p" hint-placeholder-count="6">
+                  <sc-if value="{{p.has}}" hint-placeholder-val="{{ true }}"><button type="button" class="ar-photo" aria-label="{{p.label}} photograph" aria-pressed="{{p.on}}" onClick="{{p.pick}}"><img src="{{p.src}}" alt=""></button></sc-if>
+                  <sc-if value="{{p.none}}" hint-placeholder-val="{{ false }}"><div class="ar-photo empty">{{p.label}}</div></sc-if>
+                </sc-for>
+              </div>
+            </section>
+            <section class="ar-media" aria-label="CAD reference" style="background: #07080C">
+              <span class="ar-media-tag">CAD reference</span><span class="ar-media-meta">cvs-6000d-48-f1-ac.stp</span>
+              <div class="ar-stagebox"><div class="ar-4x3">
+                <img src="{{img.cad}}" alt="Wireframe reference model of the valve">
+                <sc-if value="{{live.marker}}" hint-placeholder-val="{{ false }}">
+                  <span class="ar-marker" aria-hidden="true" style="left: {{live.mx}}%; top: {{live.my}}%"></span>
+                  <span class="ar-marker-label" style="left: {{live.mx}}%; top: {{live.my}}%">{{live.mlabel}}</span>
+                </sc-if>
+              </div></div>
+            </section>
+          </div>
+          <section class="ar-card" aria-label="Timeline and source state" style="flex: none; padding: 12px 16px">
+            <div class="ar-bar" style="justify-content: space-between; margin-bottom: 6px">
+              <h2 class="ar-h3">Timeline</h2>
+              <sc-if value="{{live.canReplay}}" hint-placeholder-val="{{ false }}"><input class="ar-range" type="range" min="0" max="{{live.max}}" step="0.1" value="{{live.et}}" aria-label="Replay position" onChange="{{onScrub}}"></sc-if>
+              <span class="ar-micro">{{live.timelineMeta}}</span>
+            </div>
+            <div style="overflow-x: auto"><div style="min-width: 520px; display: flex; flex-direction: column; gap: 2px">
+              <sc-for list="{{live.tracks}}" as="t" hint-placeholder-count="4">
+                <div class="ar-track">
+                  <span class="ar-mono ar-micro">{{t.label}}</span>
+                  <div class="ar-lane">
+                    <sc-for list="{{t.ticks}}" as="k" hint-placeholder-count="6"><i style="left: {{k.x}}%; background: {{k.c}}"></i></sc-for>
+                    <sc-if value="{{live.showHead}}" hint-placeholder-val="{{ false }}"><u style="left: {{live.head}}%"></u></sc-if>
+                  </div>
+                  <span class="ar-micro">{{t.state}}</span>
+                </div>
+              </sc-for>
+            </div></div>
+          </section>
+          </sc-if>
+        </div>
+
+        <aside class="ar-panel" aria-label="Inspection stage and findings">
+          <section class="ar-stage" aria-label="Current stage">
+            <ol class="ar-steps">
+              <sc-for list="{{live.steps}}" as="s" hint-placeholder-count="5"><li class="{{s.cls}}"><i></i>{{s.label}}</li></sc-for>
+            </ol>
+            <div role="status">
+              <div class="ar-h2">{{live.stageTitle}}</div>
+              <div class="ar-small">{{live.stageDetail}}</div>
+            </div>
+            <sc-if value="{{live.showMeter}}" hint-placeholder-val="{{ false }}">
+              <div class="ar-meterwrap" style="display: flex; flex-direction: column; gap: 5px">
+                <div class="ar-meter"><i style="width: {{live.pct}}%"></i></div>
+                <span class="ar-micro">{{live.meterLabel}}</span>
+              </div>
+            </sc-if>
+            <sc-if value="{{live.isWaiting}}" hint-placeholder-val="{{ false }}">
+              <button type="button" class="ar-btn secondary sm" onClick="{{runFeed}}">Prototype: run simulated feed</button>
+            </sc-if>
+            <sc-if value="{{live.isClosed}}" hint-placeholder-val="{{ false }}">
+              <div class="ar-bar" style="justify-content: space-between">
+                <span class="{{live.outcomeClass}}">Outcome: {{live.outcome}}</span>
+                <button type="button" class="ar-btn secondary sm" onClick="{{openDossier}}">Open Dossier</button>
+              </div>
+            </sc-if>
+          </section>
+          <sc-if value="{{live.isClosed}}" hint-placeholder-val="{{ false }}">
+            <section class="ar-summary" aria-label="Inspection summary">
+              <dl class="ar-facts">
+                <sc-for list="{{live.facts}}" as="x" hint-placeholder-count="4"><div><dt class="ar-micro">{{x.k}}</dt><dd style="overflow-wrap: anywhere">{{x.v}}</dd></div></sc-for>
+              </dl>
+            </section>
+          </sc-if>
+          <sc-if value="{{live.isActive}}" hint-placeholder-val="{{ true }}">
+          <div class="ar-feedhead">
+            <h2 class="ar-h3">Live findings</h2>
+            <div class="ar-bar" style="gap: 4px 10px">
+              <sc-for list="{{live.counts}}" as="c" hint-placeholder-count="3"><span class="ar-micro" style="color: {{c.c}}; font-weight: 600">{{c.t}}</span></sc-for>
+            </div>
+          </div>
+          <div class="ar-feed">
+            <sc-for list="{{live.findings}}" as="f" hint-placeholder-count="5">
+              <article class="ar-finding" data-open="{{f.open}}">
+                <button type="button" class="ar-finding-head" aria-expanded="{{f.open}}" onClick="{{f.toggle}}">
+                  <span style="min-width: 0">
+                    <span class="ar-finding-meta"><span class="{{f.badge}}">{{f.status}}</span><span class="ar-mono ar-micro">{{f.time}}</span></span>
+                    <span class="ar-finding-title">{{f.title}}</span>
+                    <span class="ar-finding-cap">{{f.caption}}</span>
+                  </span>
+                  <svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true" style="color: #8D93A8; margin-top: 3px"><path d="{{f.chev}}"></path></svg>
+                </button>
+                <sc-if value="{{f.show}}" hint-placeholder-val="{{ false }}">
+                  <div class="ar-finding-body">
+                    <div class="ar-quote">{{f.excerpt}}<small>Rule {{f.rule}} · {{f.ref}}</small></div>
+                    <div class="ar-small">{{f.rationale}}</div>
+                    <div class="ar-mono ar-micro">{{f.evidence}}</div>
+                    <button type="button" class="ar-link" onClick="{{f.viewRule}}">View rule {{f.rule}}<svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.right}}"></path></svg></button>
+                  </div>
+                </sc-if>
+              </article>
+            </sc-for>
+            <sc-if value="{{live.noFindings}}" hint-placeholder-val="{{ false }}">
+              <div class="ar-empty" style="padding: 32px 20px">
+                <strong>No checks evaluated yet</strong>
+                <span>Send evidence to session <span class="ar-mono">{{i.id}}</span>. Findings appear here as checks finish.</span>
+                <button type="button" class="ar-btn secondary sm" style="margin-top: 8px" onClick="{{copyId}}">Copy session ID</button>
+              </div>
+            </sc-if>
+          </div>
+          </sc-if>
+        </aside>
+
+        <sc-if value="{{live.isClosed}}" hint-placeholder-val="{{ false }}">
+          <section class="ar-reader" aria-labelledby="final-heading">
+            <div class="ar-reader-head">
+              <h2 id="final-heading" class="ar-h2" style="font-size: 20px">Final findings</h2>
+              <div class="ar-bar" style="gap: 4px 12px">
+                <sc-for list="{{live.counts}}" as="c" hint-placeholder-count="3"><span class="ar-small" style="color: {{c.c}}; font-weight: 600">{{c.t}}</span></sc-for>
+              </div>
+            </div>
+            <sc-for list="{{live.reader}}" as="f" hint-placeholder-count="6">
+              <article class="ar-read">
+                <button type="button" class="ar-read-head" aria-expanded="{{f.ariaOpen}}" onClick="{{f.toggle}}">
+                  <span><span class="{{f.badge}}">{{f.status}}</span></span>
+                  <span style="min-width: 0"><span class="ar-read-title">{{f.title}}</span><span class="ar-read-cap">{{f.caption}}</span></span>
+                  <span class="ar-mono ar-micro" style="padding-top: 3px">Rule {{f.rule}}</span>
+                  <span class="ar-mono ar-micro" style="padding-top: 3px">{{f.time}}</span>
+                  <svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true" style="color: #8D93A8; margin-top: 3px"><path d="{{f.chev}}"></path></svg>
+                </button>
+                <sc-if value="{{f.show}}" hint-placeholder-val="{{ false }}">
+                  <div class="ar-read-body">
+                    <sc-if value="{{f.src}}" hint-placeholder-val="{{ false }}"><div class="ar-read-img"><img src="{{f.src}}" alt="{{f.alt}}"></div></sc-if>
+                    <div class="ar-read-text">
+                      <div class="ar-quote" style="font-size: 14px">{{f.excerpt}}<small>Rule {{f.rule}} · {{f.ref}}</small></div>
+                      <div>{{f.rationale}}</div>
+                      <div class="ar-mono ar-micro">{{f.evidence}}</div>
+                      <button type="button" class="ar-link" style="align-self: flex-start" onClick="{{f.viewRule}}">View rule {{f.rule}}<svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.right}}"></path></svg></button>
+                    </div>
+                  </div>
+                </sc-if>
+              </article>
+            </sc-for>
+          </section>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{tabRules}}" hint-placeholder-val="{{ false }}">
+      <div class="ar-scroll"><main class="ar-page" style="padding-top: 20px; gap: 20px">
+        <section class="ar-funnel" aria-label="How rules were selected">
+          <sc-for list="{{app.funnel}}" as="f" hint-placeholder-count="3">
+            <div class="ar-funnel-step" data-final="{{f.final}}">
+              <span class="ar-funnel-n">{{f.n}}</span>
+              <span style="min-width: 0"><span class="ar-h3" style="display: block">{{f.k}}</span><span class="ar-micro" style="overflow-wrap: anywhere">{{f.sub}}</span></span>
+            </div>
+          </sc-for>
+        </section>
+        <div class="ar-split" style="gap: 20px">
+          <section class="ar-grow" aria-label="Applicable rules" style="flex-basis: 640px">
+            <sc-for list="{{app.sections}}" as="sec" hint-placeholder-count="3">
+              <div class="ar-rsec">
+                <div class="ar-rsec-head" style="position: static; padding-top: 14px"><h2 class="ar-h3" style="font-size: 15px">{{sec.name}}</h2><span class="ar-micro">{{sec.count}}</span></div>
+                <sc-for list="{{sec.rows}}" as="r" hint-placeholder-count="3">
+                  <article class="ar-rule" data-open="{{r.ariaOpen}}">
+                    <button type="button" class="ar-rule-head with-result" aria-expanded="{{r.ariaOpen}}" onClick="{{r.toggle}}">
+                      <span class="ar-mono" style="color: var(--accent); padding-top: 1px">{{r.code}}</span>
+                      <span class="ar-h3">{{r.title}}</span>
+                      <span class="ar-rule-line">{{r.line}}</span>
+                      <span class="ar-micro">{{r.evidence}}</span>
+                      <span><span class="{{r.badge}}">{{r.status}}</span></span>
+                      <svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true" style="color: #8D93A8; margin-top: 2px"><path d="{{r.chev}}"></path></svg>
+                    </button>
+                    <sc-if value="{{r.open}}" hint-placeholder-val="{{ false }}">
+                      <div class="ar-rule-body" style="padding-left: 76px">
+                        <div class="ar-rule-main">
+                          <div class="ar-quote" style="font-size: 14px">{{r.excerpt}}<small>Rule {{r.code}} · {{r.ref}}</small></div>
+                          <sc-if value="{{r.result}}" hint-placeholder-val="{{ false }}"><div>{{r.result}}</div></sc-if>
+                          <button type="button" class="ar-link" style="align-self: flex-start" onClick="{{r.viewRule}}">View rule {{r.code}}<svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.right}}"></path></svg></button>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </article>
+                </sc-for>
+              </div>
+            </sc-for>
+          </section>
+          <aside class="ar-card pad ar-side" aria-label="Why these rules apply" style="display: flex; flex-direction: column; gap: 16px; flex-basis: 320px">
+            <h2 class="ar-h2">Why these rules</h2>
+            <dl class="ar-facts" style="grid-template-columns: minmax(0, 1fr)">
+              <div><dt class="ar-micro">Valve type</dt><dd>CVS 6000D</dd></div>
+              <div><dt class="ar-micro">End connection</dt><dd>Flanged, from the CAD reference</dd></div>
+              <div><dt class="ar-micro">Customer specification or work order</dt><dd style="overflow-wrap: anywhere">{{app.specName}}</dd></div>
+            </dl>
+            <sc-if value="{{app.canUpload}}" hint-placeholder-val="{{ false }}">
+              <label for="ins-spec" class="ar-drop">
+                <svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.upload}}"></path></svg>
+                <span><strong>Upload specification</strong><span class="ar-small">Adds rules that compare against order values</span></span>
+              </label>
+              <input id="ins-spec" class="ar-sr" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" onChange="{{onInspectionSpec}}">
+            </sc-if>
+            <sc-if value="{{app.noSpec}}" hint-placeholder-val="{{ false }}"><div class="ar-note">Rules 2.3, 4.1 and 10.4 need order values, so they are left out until a specification is uploaded.</div></sc-if>
+            <div>
+              <div class="ar-label" style="margin-bottom: 6px">Left out of this inspection</div>
+              <ul style="display: flex; flex-direction: column; gap: 6px; color: var(--text-2); font-size: 13px">
+                <li>Type-specific torque, sequence and leakage rules: written for other valve types.</li>
+                <li>Butt-weld and threaded end rules: this valve has flanged ends.</li>
+                <li>Other internals rules: not visible on an assembled valve.</li>
+                <li>Pressure test rules: recorded on the test certificate.</li>
+              </ul>
+            </div>
+          </aside>
+        </div>
+      </main></div>
+    </sc-if>
+
+    <sc-if value="{{tabDocs}}" hint-placeholder-val="{{ false }}">
+      <div class="ar-scroll"><main class="ar-page" style="padding-top: 20px">
+        <div class="ar-bar">
+          <div class="ar-chips">
+            <sc-for list="{{docChips}}" as="c" hint-placeholder-count="6">
+              <button type="button" class="ar-chip" aria-pressed="{{c.on}}" onClick="{{c.pick}}">{{c.label}} <b>{{c.n}}</b></button>
+            </sc-for>
+          </div>
+          <div class="ar-spacer"></div>
+          <div class="ar-search" style="flex: 0 1 260px">
+            <svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.search}}"></path></svg>
+            <label for="doc-search" class="ar-sr">Search documents</label>
+            <input id="doc-search" class="ar-input" type="search" placeholder="Search files" value="{{docQ}}" onChange="{{onDocQ}}">
+          </div>
+        </div>
+        <section class="ar-card" aria-label="Documents and evidence" style="overflow: hidden">
+          <div class="ar-rows"><div style="min-width: 760px">
+            <div class="ar-rowhead" style="grid-template-columns: 44px minmax(220px, 1fr) 130px 84px 112px 48px"><span></span><span>File</span><span>Type</span><span>Size</span><span>Received</span><span></span></div>
+            <sc-for list="{{docRows}}" as="d" hint-placeholder-count="6">
+              <div class="ar-row static" style="grid-template-columns: 44px minmax(220px, 1fr) 130px 84px 112px 48px; min-height: 58px">
+                <span style="display: flex; align-items: center; justify-content: center; width: 44px; height: 38px; overflow: hidden; background: var(--surface-2); border-radius: 8px; color: var(--text-2)">
+                  <sc-if value="{{d.src}}" hint-placeholder-val="{{ false }}"><img src="{{d.src}}" alt="" style="display: block; width: 100%; height: 100%; object-fit: cover"></sc-if>
+                  <sc-if value="{{d.noSrc}}" hint-placeholder-val="{{ true }}"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{d.icon}}"></path></svg></sc-if>
+                </span>
+                <span style="min-width: 0"><span style="display: block; font-weight: 600; overflow-wrap: anywhere">{{d.name}}</span><span class="ar-micro">{{d.source}}</span></span>
+                <span class="ar-small">{{d.kind}}</span>
+                <span class="ar-mono ar-micro">{{d.size}}</span>
+                <span class="ar-mono ar-micro">{{d.when}}</span>
+                <button type="button" class="ar-btn ghost sm icon-only" aria-label="Download {{d.name}}" onClick="{{d.download}}"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.down}}"></path></svg></button>
+              </div>
+            </sc-for>
+          </div></div>
+          <sc-if value="{{docEmpty}}" hint-placeholder-val="{{ false }}"><div class="ar-empty"><strong>No files match</strong><span>Try another name or clear the filter.</span></div></sc-if>
+        </section>
+      </main></div>
+    </sc-if>
+
+    <sc-if value="{{tabDossier}}" hint-placeholder-val="{{ false }}">
+      <div class="ar-scroll"><main class="ar-page" style="padding-top: 20px; max-width: 1028px">
+        <div class="ar-bar" style="justify-content: flex-end">
+          <button type="button" class="ar-btn secondary" onClick="{{downloadDossier}}"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ic.down}}"></path></svg>Download dossier</button>
+        </div>
+        <article class="ar-paper">
+          <sc-if value="{{dos.partial}}" hint-placeholder-val="{{ false }}"><div class="ar-paper-banner">Partial dossier. This inspection was terminated early, so evidence and checks are incomplete.</div></sc-if>
+          <div class="ar-bar" style="justify-content: space-between; align-items: flex-start; gap: 24px; padding-bottom: 24px; border-bottom: 2px solid var(--paper-ink)">
+            <div style="flex: 1 1 380px; min-width: 0">
+              <div class="ar-small" style="font-weight: 600">Argus inspection dossier</div>
+              <h2 class="ar-h1" style="margin-top: 4px">{{dos.title}}</h2>
+              <p style="margin-top: 10px; font-size: 16px">{{dos.summary}}</p>
+            </div>
+            <div style="flex: 0 1 230px; padding: 16px 18px; border-radius: 8px; background: {{dos.bg}}; color: {{dos.fg}}">
+              <div style="font-size: 13px; font-weight: 600">Overall conclusion</div>
+              <div style="font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em">{{dos.conclusion}}</div>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(130px, 100%), 1fr)); gap: 8px">
+            <sc-for list="{{dos.totals}}" as="t" hint-placeholder-count="5"><div class="ar-paper-tile"><div style="font-size: 28px; line-height: 1.1; font-weight: 700; color: {{t.c}}">{{t.n}}</div><div class="ar-small">{{t.k}}</div></div></sc-for>
+          </div>
+          <section><h3 class="ar-h2" style="margin-bottom: 8px">Inspection identification</h3>
+            <sc-for list="{{dos.ident}}" as="x" hint-placeholder-count="5"><div class="ar-paper-row" style="grid-template-columns: 180px minmax(0, 1fr)"><span class="ar-muted">{{x.k}}</span><span>{{x.v}}</span></div></sc-for>
+          </section>
+          <section><h3 class="ar-h2" style="margin-bottom: 8px">Reference baseline</h3>
+            <sc-for list="{{dos.baseline}}" as="x" hint-placeholder-count="3"><div class="ar-paper-row" style="grid-template-columns: 180px minmax(0, 1fr)"><span class="ar-muted">{{x.k}}</span><span>{{x.v}}</span></div></sc-for>
+          </section>
+          <section><h3 class="ar-h2" style="margin-bottom: 8px">Detailed findings</h3>
+            <sc-for list="{{dos.findings}}" as="f" hint-placeholder-count="6">
+              <div class="ar-paper-row" style="grid-template-columns: 124px minmax(0, 1fr) 150px; align-items: start">
+                <span style="font-weight: 700; color: {{f.c}}">{{f.status}}</span>
+                <span><span style="display: block; font-weight: 600">{{f.title}}</span><span class="ar-muted" style="display: block">{{f.caption}}</span></span>
+                <span class="ar-muted">Rule {{f.rule}}</span>
+              </div>
+            </sc-for>
+          </section>
+          <section><h3 class="ar-h2" style="margin-bottom: 8px">Evidence register</h3>
+            <p class="ar-small" style="margin-bottom: 6px">{{dos.evidenceNote}}</p>
+            <sc-for list="{{dos.evidence}}" as="e" hint-placeholder-count="5"><div class="ar-paper-row" style="grid-template-columns: 86px 130px minmax(0, 1fr) 100px"><span class="ar-mono">{{e.when}}</span><span>{{e.kind}}</span><span style="overflow-wrap: anywhere">{{e.name}}</span><span class="ar-mono">{{e.hash}}</span></div></sc-for>
+          </section>
+          <section><h3 class="ar-h2" style="margin-bottom: 8px">Activity and caveats</h3>
+            <sc-for list="{{dos.notes}}" as="n" hint-placeholder-count="3"><div class="ar-paper-row">{{n.t}}</div></sc-for>
+          </section>
+        </article>
+      </main></div>
+    </sc-if>
+  </sc-if>
+
+  <sc-if value="{{dialogEnd}}" hint-placeholder-val="{{ false }}">
+    <div class="ar-scrim">
+      <div class="ar-dialog" role="dialog" aria-modal="true" aria-labelledby="end-title">
+        <div class="ar-dialog-ic" style="background: var(--warn-soft); color: var(--warn)"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><path d="{{ic.warn}}"></path></svg></div>
+        <h2 id="end-title" class="ar-h2" style="font-size: 20px">End this inspection?</h2>
+        <ul>
+          <li>New evidence stops being accepted.</li>
+          <li>Queued analysis finishes, then findings are frozen.</li>
+          <li>The dossier is generated and the session cannot be reopened.</li>
+        </ul>
+        <sc-if value="{{dialogTruncated}}" hint-placeholder-val="{{ false }}"><div class="ar-note">The evidence feed has not finished. The dossier will record a truncated stream and may be Inconclusive.</div></sc-if>
+        <div class="ar-bar" style="justify-content: flex-end">
+          <button type="button" class="ar-btn ghost" onClick="{{closeDialog}}">Keep inspecting</button>
+          <button type="button" class="ar-btn primary" onClick="{{confirmEnd}}">End Inspection</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{dialogTerminate}}" hint-placeholder-val="{{ false }}">
+    <div class="ar-scrim">
+      <div class="ar-dialog" role="dialog" aria-modal="true" aria-labelledby="term-title">
+        <div class="ar-dialog-ic" style="background: var(--fail-soft); color: var(--fail)"><svg class="ar-icon" viewBox="0 0 24 24" aria-hidden="true" style="width: 20px; height: 20px"><path d="{{ic.warn}}"></path></svg></div>
+        <h2 id="term-title" class="ar-h2" style="font-size: 20px">Terminate this inspection now?</h2>
+        <ul>
+          <li>Uploads stop immediately and running analysis is cancelled.</li>
+          <li>Received evidence and finished findings are kept.</li>
+          <li>Unfinished checks are marked Not inspected, never Pass.</li>
+          <li>A partial dossier is generated. This cannot be undone.</li>
+        </ul>
+        <div class="ar-field">
+          <label for="term-reason">Reason (optional)</label>
+          <input id="term-reason" class="ar-input" type="text" placeholder="e.g. Operator stopped during scan" value="{{termReason}}" onChange="{{onTermReason}}">
+        </div>
+        <div class="ar-bar" style="justify-content: flex-end">
+          <button type="button" class="ar-btn ghost" onClick="{{closeDialog}}">Keep inspecting</button>
+          <button type="button" class="ar-btn danger-solid" onClick="{{confirmTerminate}}">Terminate Now</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{hasToast}}" hint-placeholder-val="{{ false }}">
+    <div class="ar-toast" role="status">
+      <span>{{toastText}}</span>
+      <sc-if value="{{toastAction}}" hint-placeholder-val="{{ false }}"><button type="button" class="ar-btn secondary sm" onClick="{{toastGo}}">{{toastAction}}</button></sc-if>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+const BLOB = (id) => '/_blob/' + id;
+const IMG = {
+  video: BLOB('dfb7afed5e4911f33b630078aee90ba8'), cad: BLOB('27eb1fb0b3044c82e23e2ffd10ff5ad6'),
+  scan: BLOB('7b481d9787e8e3b8e6aa9f9933d789dd'), partial: BLOB('a60a4fc88ba093357a868f7826f4787b')
+};
+const RULES_URL = BLOB('a89b72fbef06804399486a49330177b4');
+const ICON = {
+  search: 'M21 21l-4.3-4.3M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z',
+  upload: 'M12 16V4M7 9l5-5 5 5M4 20h16',
+  down: 'M12 4v12M7 11l5 5 5-5M4 20h16',
+  file: 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8ZM14 3v5h5',
+  video: 'M4 6h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2ZM17 10l5-3v10l-5-3',
+  cube: 'M12 2l9 5v10l-9 5-9-5V7ZM12 22V12M21 7l-9 5-9-5',
+  x: 'M6 6l12 12M18 6 6 18', right: 'm9 6 6 6-6 6', left: 'm15 6-6 6 6 6', up: 'm6 15 6-6 6 6', dn: 'm6 9 6 6 6-6',
+  copy: 'M9 9h11v11H9ZM5 15H4V4h11v1', warn: 'M12 4 3 20h18ZM12 10v4M12 17.5v.5',
+  play: 'M7 4v16l13-8Z', pause: 'M8 5v14M16 5v14', collapse: 'M4 14h6v6M20 10h-6V4M14 10l6-6M4 20l6-6', expand: 'M14 4h6v6M10 20H4v-6M20 4l-6 6M4 20l6-6'
+};
+const COLORS = { pass: '#4BE0A0', warn: '#FFB547', fail: '#FF7468', info: '#79C7FF', none: '#8D93A8', accent: '#A594FF' };
+const PHOTOS = [
+  { at: 7.2, key: 'ff', name: 'shot_02_front_flange.jpg', label: 'Front flange', src: BLOB('e5e292a2f0336137b34811d895a3250d') },
+  { at: 12, key: 'bonnet', name: 'shot_03_bonnet.jpg', label: 'Bonnet', src: BLOB('3e27f1f864e33b78e03ac4d368a0d595') },
+  { at: 16.8, key: 'plate', name: 'shot_04_body_nameplate.jpg', label: 'Body', src: BLOB('59a45af86756249882b1bf8ded33c16b') },
+  { at: 21.6, key: 'act', name: 'shot_05_actuator.jpg', label: 'Actuator', src: BLOB('a23692111ef1441782462469496c8765') },
+  { at: 26.4, key: 'of', name: 'shot_06_other_flange.jpg', label: 'Other flange', src: BLOB('674e2db9c31b948cfacb50ce02c6c346') },
+  { at: 31.2, key: 'link', name: 'shot_07_linkage.jpg', label: 'Linkage', src: BLOB('9256c1124af03570fabfafae2b823bd1') }
+];
+const CHECKS = [
+  { id: 'c1', at: 9.0, status: 'PASS', title: 'Front flange bolt pattern matches CAD', caption: 'Bolt count and spacing from the scan agree with the reference model.', rule: '4.5', excerpt: 'Correct number, dia, PCD. Straddle vertical centreline', ref: 'ASME B16.5 / B16.47', rationale: 'Registered scan points compared with the CAD bolt circle.', evidence: 'chunk_0001.ply · shot_02_front_flange.jpg', photo: 'ff', mark: [18, 72, 'Front flange'] },
+  { id: 'c2', at: 10.5, status: 'PASS', title: 'Front flange face shows no damage', caption: 'No scratches, nicks or pitting are visible on the sealing face.', rule: '4.3', excerpt: 'No radial scratches, nicks, burrs, pitting, or warping', ref: 'ASME B16.5 Para. 6', rationale: 'Visible surface only. Finish roughness is not measured.', evidence: 'shot_02_front_flange.jpg', photo: 'ff', mark: [18, 72, 'Front flange'] },
+  { id: 'c3', at: 13.5, status: 'WARNING', title: 'One bonnet fastener looks inconsistent', caption: 'One stud in the bolt ring stands higher than the others and has a different finish.', rule: '7.6', excerpt: 'Correct material, fully fitted, even stud protrusion', ref: 'ASME B16.34 Para. 6', rationale: 'Visual indication only; torque and seating height not yet measured.', evidence: 'shot_03_bonnet.jpg · confidence 0.73', photo: 'bonnet', mark: [49, 52, 'Bonnet bolt ring'] },
+  { id: 'c4', at: 18.5, status: 'INSUFFICIENT', title: 'Body surface check is inconclusive', caption: 'Photo detail is too low to rule out fine cracks. A closer view is needed.', rule: '3.1', excerpt: 'No crack-type defects allowed', ref: 'ASME B16.34 Para. 5-6 / MSS SP-55', rationale: 'Image resolution at the body is below what this check needs.', evidence: 'shot_04_body_nameplate.jpg', photo: 'plate', mark: [50, 72, 'Valve body'], revise: { at: 28, status: 'PASS', title: 'Body surface shows no visible cracks', caption: 'Closer video frames show no crack-type marks. Updated from Insufficient evidence.', rationale: 'Visible surface only. Crack depth is not assessed.', evidence: 'shot_04_body_nameplate.jpg · shot_06_001.mp4' } },
+  { id: 'c5', at: 20.0, status: 'PASS', title: 'Identification plate is secure', caption: 'The plate is fixed in place and not covered by paint.', rule: '2.7', excerpt: 'Not loose, not obscured by paint', ref: 'ASME B16.34 Para. 4 / MSS SP-25', rationale: 'Plate edges and rivets are visible in the photograph.', evidence: 'shot_04_body_nameplate.jpg', photo: 'plate', mark: [50, 72, 'Nameplate'] },
+  { id: 'c6', needsSpec: true, at: 22.0, status: 'PASS', title: 'Pressure class marking matches the order', caption: 'The class read from the plate agrees with the purchase order.', rule: '2.3', excerpt: '150 / 300 / 600 etc. matches PO', ref: 'ASME B16.34 Para. 4', rationale: 'Text read from the plate and compared with order values.', evidence: 'shot_04_body_nameplate.jpg', photo: 'plate', mark: [50, 72, 'Nameplate'] },
+  { id: 'c7', at: 25.0, status: 'PASS', title: 'Actuator is fitted correctly', caption: 'The actuator is seated and no cracks are visible on the housing.', rule: '8.1', excerpt: 'Correctly fitted, not cracked, closing direction marked', ref: 'Manufacturer Std / PO', rationale: 'Mounting checked against the CAD reference.', evidence: 'shot_05_actuator.jpg', photo: 'act', mark: [50, 20, 'Actuator'] },
+  { id: 'c8', needsSpec: true, at: 30.0, status: 'PASS', title: 'Flange type matches the order', caption: 'The flange facing agrees with the order and the GA drawing.', rule: '4.1', excerpt: 'As per PO and GA drawing', ref: 'ASME B16.5 Para. 6 / B16.47', rationale: 'Facing type identified from the scan and photographs.', evidence: 'chunk_0015.ply · shot_06_other_flange.jpg', photo: 'of', mark: [82, 72, 'Other flange'] },
+  { id: 'c9', at: 34.0, status: 'WARNING', title: 'Position indicator may not agree with valve position', caption: 'The indicator looks offset from the closed mark in the linkage photo.', rule: '8.3', excerpt: 'Agrees with actual disc/ball position', ref: 'Manufacturer Std / PO', rationale: 'Indicator read from one angle. Needs a check at full travel.', evidence: 'shot_07_linkage.jpg', photo: 'link', mark: [60, 38, 'Position indicator'] },
+  { id: 'c10', needsSpec: true, at: 38.0, status: 'PASS', title: 'No paint on sealing faces or nameplate', caption: 'Painted areas stop clear of the flange faces and the plate.', rule: '10.4', excerpt: 'Correct primer/shade. No paint on sealing faces, nameplate, stem', ref: 'PO Specification', rationale: 'Primer shade is not assessed from images.', evidence: 'shot_02_front_flange.jpg · shot_06_other_flange.jpg', photo: 'of', mark: [82, 72, 'Other flange'] }
+];
+const LABEL = { PASS: 'Pass', WARNING: 'Warning', FAIL: 'Fail', INSUFFICIENT: 'Insufficient evidence', NOT: 'Not inspected', RUN: 'Analyzing…' };
+const BADGE = { PASS: 'ar-badge pass', WARNING: 'ar-badge warn', FAIL: 'ar-badge fail', INSUFFICIENT: 'ar-badge info', NOT: 'ar-badge', RUN: 'ar-badge accent ar-dot-live' };
+const SESSION = {
+  waiting: ['Waiting', 'ar-badge'], receiving: ['Receiving', 'ar-badge accent ar-dot-live'], analyzing: ['Analyzing', 'ar-badge accent ar-dot-live'],
+  ready: ['Ready to Close', 'ar-badge info'], finalizing: ['Finalizing', 'ar-badge accent ar-dot-live'], completed: ['Completed', 'ar-badge pass'], terminated: ['Terminated', 'ar-badge fail']
+};
+const OUTCOME = { Pass: 'ar-badge plain pass', Warning: 'ar-badge plain warn', Fail: 'ar-badge plain fail', Inconclusive: 'ar-badge plain info', Pending: 'ar-badge plain' };
+const ACTIVE = ['waiting', 'receiving', 'analyzing', 'ready'];
+const fmt = (s) => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+const size = (b) => b > 1e6 ? (b / 1e6).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1e3)) + ' KB';
+const hash = (s) => { let h = 7; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h.toString(16).padStart(8, '0'); };
+const segName = (i) => { const s = Math.floor(i * 8 / 26); return 'shot_0' + (s + 1) + '_' + String(i - Math.ceil(s * 26 / 8)).padStart(3, '0') + '.mp4'; };
+const has = (q, ...xs) => !q || xs.join(' ').toLowerCase().includes(q.toLowerCase());
+const SEED_SPEC = { name: 'Customer_Specification_CVS6000D.pdf', bytes: 2340000 };
+const SEEDS = [
+  { id: 'insp-125', name: 'CVS Blue Valve — Recheck', started: '01 Nov 2026, 15:10', status: 'waiting', t: 0, spec: null, uploads: [] },
+  { id: 'insp-124', name: 'CVS Blue Valve — Run 03', started: '01 Nov 2026, 15:02', status: 'analyzing', t: 22.4, spec: SEED_SPEC, uploads: [], paused: true },
+  { id: 'insp-123', name: 'CVS Blue Valve — Run 02', started: '01 Nov 2026, 14:22', closed: '01 Nov 2026, 14:25', status: 'completed', closure: 'normal', t: 41, spec: SEED_SPEC, uploads: [] },
+  { id: 'insp-122', name: 'CVS Grey Valve — Run 01', started: '01 Nov 2026, 13:30', closed: '01 Nov 2026, 13:31', status: 'terminated', closure: 'terminated', reason: 'Operator stopped during scan', t: 14.9, spec: null, uploads: [] },
+  { id: 'insp-121', name: 'CVS Blue Valve — Run 01', started: '01 Nov 2026, 11:05', closed: '01 Nov 2026, 11:08', status: 'completed', closure: 'normal', t: 41, spec: SEED_SPEC, uploads: [], clean: true }
+];
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      view: 'home', tab: 'live', activeId: null, inspections: SEEDS, seq: 126, dialog: null, termReason: '', openId: undefined, evCollapsed: false, review: null, readOpen: {}, appOpen: {},
+      homeQ: '', homeFilter: 'All', repQ: '', repFilter: 'All', docQ: '', docFilter: 'All',
+      startName: '', startSpec: null, toast: null,
+      rules: null, ruleQ: '', ruleType: '', ruleEv: '', ruleGroup: 'visual', rulePicked: false, ruleOpen: {}, ruleSpy: null, ruleJump: null, backId: null
+    };
+  }
+  componentDidMount() {
+    this.timer = setInterval(() => this.tick(), 250);
+    fetch(RULES_URL).then((r) => r.json()).then((rules) => this.setState({ rules })).catch(() => this.setState({ rulesFailed: true }));
+  }
+  componentDidUpdate() {
+    const jump = this.state.ruleJump;
+    if (!jump) return;
+    const el = document.getElementById(jump);
+    if (el) el.scrollIntoView({ block: 'start' });
+    this.setState({ ruleJump: null });
+  }
+  componentWillUnmount() { clearInterval(this.timer); clearTimeout(this.toastTimer); }
+  tick() {
+    if (this.state.review && this.state.review.playing) {
+      this.setState((s) => {
+        const t = Math.min(s.review.max, s.review.t + 0.4);
+        return { review: { ...s.review, t, playing: t < s.review.max } };
+      });
+    }
+    const live = this.state.inspections.some((x) => x.running);
+    if (!live) return;
+    this.setState((s) => ({
+      inspections: s.inspections.map((x) => {
+        if (!x.running) return x;
+        const t = Math.min(41, x.t + 0.4);
+        const status = t >= 41 ? 'ready' : t >= 8 ? 'analyzing' : 'receiving';
+        return { ...x, t, status, running: t < 41 };
+      })
+    }));
+  }
+  patch(id, obj) { this.setState((s) => ({ inspections: s.inspections.map((x) => x.id === id ? { ...x, ...obj } : x) })); }
+  say(text, action, go) {
+    clearTimeout(this.toastTimer);
+    this.setState({ toast: { text, action, go } });
+    this.toastTimer = setTimeout(() => this.setState({ toast: null }), 6000);
+  }
+  open(x, tab) {
+    if (x.paused) this.patch(x.id, { paused: false, running: true });
+    this.setState({ view: 'inspection', activeId: x.id, tab: tab || 'live', openId: undefined, docQ: '', docFilter: 'All', review: null, evCollapsed: false, readOpen: {}, appOpen: {} });
+  }
+  checks(x) { return CHECKS.filter((c) => !c.needsSpec || x.spec); }
+  findings(x) {
+    const out = [];
+    this.checks(x).forEach((c) => {
+      if (c.at <= x.t) {
+        let f = { ...c };
+        if (x.clean) f = { ...f, status: 'PASS', ...(c.revise || {}), caption: c.status === 'PASS' ? c.caption : c.revise ? c.revise.caption : 'Checked and within the rule.', title: c.id === 'c3' ? 'Bonnet fasteners are even and seated' : c.id === 'c9' ? 'Position indicator agrees with valve position' : (c.revise || c).title };
+        else if (c.revise && c.revise.at <= x.t) f = { ...f, ...c.revise };
+        out.push(f);
+      } else if (['completed', 'terminated', 'finalizing'].includes(x.status)) {
+        out.push({ ...c, status: 'NOT', caption: 'This check did not run before the inspection closed.', rationale: 'No result. A check that did not run is never marked Pass.' });
+      }
+    });
+    return out;
+  }
+  counts(fs) {
+    const n = (k) => fs.filter((f) => f.status === k).length;
+    return { pass: n('PASS'), warn: n('WARNING'), fail: n('FAIL'), insuff: n('INSUFFICIENT'), none: n('NOT') };
+  }
+  outcome(x, c) {
+    if (['waiting', 'receiving', 'analyzing', 'ready', 'finalizing'].includes(x.status)) return 'Pending';
+    if (c.fail) return 'Fail';
+    if (x.closure === 'terminated' || c.none || c.insuff) return 'Inconclusive';
+    return c.warn ? 'Warning' : 'Pass';
+  }
+  countsText(c) {
+    const p = [];
+    if (c.pass) p.push(c.pass + ' Pass');
+    if (c.warn) p.push(c.warn + ' Warning');
+    if (c.fail) p.push(c.fail + ' Fail');
+    if (c.insuff) p.push(c.insuff + ' Insufficient');
+    if (c.none) p.push(c.none + ' Unchecked');
+    return p.length ? p.join(' · ') : 'No findings yet';
+  }
+  bar(c) {
+    return [[c.pass, COLORS.pass], [c.warn, COLORS.warn], [c.fail, COLORS.fail], [c.insuff, COLORS.info], [c.none, '#454B5E']].filter((b) => b[0]).map((b) => ({ n: b[0], c: b[1] }));
+  }
+  docs(x) {
+    const list = [];
+    const closed = ['completed', 'terminated'].includes(x.status);
+    if (closed) list.push({ kind: 'Report', cat: 'Reports', name: x.id + '_dossier.html', source: x.closure === 'terminated' ? 'Partial dossier' : 'Generated at closure', bytes: 480000, when: 'At closure', icon: ICON.file, dossier: true });
+    if (x.spec) list.push({ kind: 'Customer specification', cat: 'Specifications', name: x.spec.name, source: 'Uploaded at start', bytes: x.spec.bytes, when: '00:00', icon: ICON.file, file: x.spec.file });
+    x.uploads.forEach((u) => list.push({ kind: 'Uploaded evidence', cat: 'Uploaded', name: u.name, source: 'Uploaded by operator', bytes: u.bytes, when: u.when, icon: ICON.upload, file: u.file }));
+    list.push({ kind: 'CAD baseline', cat: 'Specifications', name: 'cvs-6000d-48-f1-ac.stp', source: 'Pinned reference', bytes: 18400000, when: '00:00', icon: ICON.cube });
+    list.push({ kind: 'Rule snapshot', cat: 'Specifications', name: 'ASME_B16_Visual_Inspection_Checklist.md', source: 'Pinned reference', bytes: 9000, when: '00:00', icon: ICON.file });
+    PHOTOS.filter((p) => p.at <= x.t).forEach((p) => list.push({ kind: 'Photograph', cat: 'Photographs', name: p.name, source: 'camera-photos-01 · synthetic', bytes: 6200000, when: fmt(p.at), src: p.src }));
+    for (let i = 0; i < 18; i++) { const at = 7.6 + i * 1.6; if (at <= x.t) list.push({ kind: 'Point cloud', cat: 'Point clouds', name: 'chunk_' + String(i + 1).padStart(4, '0') + '.ply', source: 'laser-01 · synthetic', bytes: 5300000, when: fmt(at), icon: ICON.cube }); }
+    for (let i = 0; i < 26; i++) { const at = i * 1.5; if (at <= x.t && x.t > 0.1) list.push({ kind: 'Video segment', cat: 'Video', name: segName(i), source: 'camera-01 · synthetic', bytes: 8200000, when: fmt(at), icon: ICON.video }); }
+    return list;
+  }
+  async save(name, data, note) {
+    let dl = null;
+    try { dl = window.claude ? await window.claude.use('downloads') : null; } catch (e) { dl = null; }
+    if (!dl) { this.say('Downloads are not available in this view.'); return; }
+    try { await dl.save({ filename: name, data }); this.say((note || 'Saved ') + name); }
+    catch (e) { if (e && e.code !== 'declined') this.say('Could not save ' + name + '.'); }
+  }
+  async saveDoc(d, x) {
+    if (d.dossier) return this.saveDossier(x);
+    if (d.file) return this.save(d.name, d.file);
+    if (d.src) { const blob = await (await fetch(d.src)).blob(); return this.save(d.name, blob); }
+    return this.save(d.name + '.txt', 'Placeholder for ' + d.name + '. The prototype holds no original file for this item.', 'Saved placeholder ');
+  }
+  saveDossier(x) {
+    const fs = this.findings(x); const c = this.counts(fs); const o = this.outcome(x, c);
+    const rows = fs.map((f) => '<tr><td>' + LABEL[f.status] + '</td><td>' + f.title + '</td><td>Rule ' + f.rule + '</td></tr>').join('');
+    return this.save(x.id + '_dossier.html', '<!doctype html><meta charset="utf-8"><title>' + x.name + '</title><h1>' + x.name + '</h1><p>Overall conclusion: ' + o + '</p><p>Sample prototype data.</p><table>' + rows + '</table>');
+  }
+  gotoRule(code, backId) {
+    const rs = this.state.rules ? this.state.rules.rules : [];
+    const r = rs.find((v) => v.group === 'visual' && v.code === code);
+    this.setState((v) => ({ view: 'rules', ruleQ: '', ruleType: '', ruleEv: '', rulePicked: false, ruleGroup: 'visual', ruleOpen: r ? { ...v.ruleOpen, [r.id]: true } : v.ruleOpen, ruleJump: r ? 'rule-' + r.id : null, backId }));
+  }
+  finalize(x, obj, tabToast) {
+    this.patch(x.id, { ...obj, status: 'finalizing', running: false, paused: false });
+    this.setState({ dialog: null, termReason: '', tab: 'live' });
+    setTimeout(() => {
+      this.patch(x.id, { status: obj.closure === 'terminated' ? 'terminated' : 'completed', closed: '02 Nov 2026, ' + new Date().toTimeString().slice(0, 5) });
+      this.setState((s) => (s.activeId === x.id ? { tab: 'dossier' } : {}));
+      this.say(tabToast);
+    }, 2600);
+  }
+  findingView(f, x, openId, backId) {
+    const open = openId === f.id;
+    return {
+      id: f.id, status: LABEL[f.status], badge: BADGE[f.status], time: f.time || fmt(f.at), title: f.title, caption: f.caption, rule: f.rule, ref: f.ref, excerpt: f.excerpt,
+      rationale: f.rationale, evidence: f.evidence, open: open ? 'true' : 'false', show: open, chev: open ? ICON.up : ICON.dn,
+      toggle: () => this.setState({ openId: open ? null : f.id }), viewRule: () => this.gotoRule(f.rule, backId)
+    };
+  }
+  liveVals(x, fs, rawOpen, docs, outcome) {
+    const t = x.t;
+    const active = ACTIVE.includes(x.status);
+    const closed = ['completed', 'terminated'].includes(x.status);
+    const max = Math.min(t, 41);
+    const review = this.state.review;
+    const et = closed && review ? review.t : t;
+    const rank = (f) => (f.status === 'NOT' ? -1 : f.revise && f.revise.at <= t ? f.revise.at : f.at);
+    const sorted = [...fs].sort((a, b) => rank(b) - rank(a));
+    const checks = this.checks(x);
+    const next = checks.find((c) => c.at > t);
+    const analyzing = x.running && next && next.at - t < 3;
+    const defaultOpen = sorted.find((f) => f.status === 'WARNING');
+    const openId = rawOpen === undefined ? (defaultOpen ? defaultOpen.id : null) : rawOpen;
+    const openF = fs.find((f) => f.id === openId);
+    const c = this.counts(fs);
+    const done = fs.filter((f) => f.status !== 'NOT').length;
+    const items = sorted.filter((f) => f.status !== 'NOT' || x.status !== 'finalizing').map((f) => this.findingView(f, x, openId, x.id));
+    if (analyzing) items.unshift({ id: 'run', status: LABEL.RUN, badge: BADGE.RUN, time: 'Now', title: next.title.replace(/ (matches|shows|is|may|fitted).*$/, ''), caption: 'Evidence received. Comparing it with the rule.', chev: '', open: 'false', show: false, toggle: () => {} });
+    const stateIdx = { waiting: 0, receiving: 1, analyzing: 2, ready: 3, finalizing: 4 }[x.status] ?? 5;
+    const steps = ['Waiting', 'Receiving', 'Analyzing', 'Ready to Close', 'Finalizing'].map((label, i) => ({ label, cls: 'ar-step' + (i < stateIdx ? ' done' : i === stateIdx ? ' on' : '') }));
+    if (x.status === 'analyzing') steps[1].cls = 'ar-step on';
+    if (x.closure === 'terminated' && (closed || x.status === 'finalizing')) steps[3].cls = 'ar-step';
+    if (closed && t === 0) { steps[1].cls = 'ar-step'; steps[2].cls = 'ar-step'; }
+    const stage = {
+      waiting: ['Waiting for evidence', 'Nothing received yet. Panels update as files arrive.'],
+      receiving: ['Receiving evidence', 'Video is arriving. Checks start when the first photograph and scan land.'],
+      analyzing: ['Receiving and analyzing', next ? 'Next check: ' + next.title.replace(/ (matches|shows|is|may|fitted).*$/, '').toLowerCase() + '. ' + (checks.length - done) + ' remaining.' : 'Finishing the last checks.'],
+      ready: ['Ready to close', 'Feed complete and analysis finished. No outcome is final until you end the inspection.'],
+      finalizing: ['Finalizing report', 'Stopping evidence, freezing findings and generating the dossier.'],
+      completed: ['Completed', 'Closed ' + x.closed + '. Evidence and findings are frozen.'],
+      terminated: ['Terminated', 'Closed ' + x.closed + (x.reason ? '. Reason: ' + x.reason + '.' : '.') + ' Evidence is partial.']
+    }[x.status];
+    const photos = PHOTOS.map((p) => {
+      const got = p.at <= et;
+      return { ...p, has: got, none: !got, on: openF && openF.photo === p.key ? 'true' : 'false', pick: () => { const f = fs.find((v) => v.photo === p.key); if (f) this.setState({ openId: f.id }); } };
+    });
+    const nPhotos = PHOTOS.filter((p) => p.at <= et).length;
+    const chunks = Array.from({ length: 18 }, (_, i) => 7.6 + i * 1.6).filter((a) => a <= et);
+    const segs = Array.from({ length: 26 }, (_, i) => i * 1.5).filter((a) => a <= et && et > 0.1);
+    const pctOf = (a) => (a / 41 * 100).toFixed(1);
+    const up = x.uploads.map((u) => ({ x: pctOf(u.at), c: COLORS.accent }));
+    const state = x.status === 'waiting' ? 'Idle' : t >= 40 ? 'Finished' : x.running ? 'Receiving' : 'Stopped';
+    const coverage = Math.round(chunks.length / 18 * 94);
+    const collapsed = closed && this.state.evCollapsed;
+    const files = docs.filter((d) => ['Video', 'Photographs', 'Point clouds', 'Uploaded'].includes(d.cat));
+    const order = { FAIL: 0, WARNING: 1, INSUFFICIENT: 2, PASS: 3, NOT: 4 };
+    const readOpen = this.state.readOpen;
+    const reader = !closed ? [] : [...fs].sort((a, b) => order[a.status] - order[b.status] || a.at - b.at).map((f) => {
+      const show = readOpen[f.id] !== undefined ? readOpen[f.id] : order[f.status] < 3;
+      const photo = PHOTOS.find((p) => p.key === f.photo);
+      return {
+        status: LABEL[f.status], badge: BADGE[f.status], time: fmt(f.at), title: f.title, caption: f.caption, rule: f.rule, ref: f.ref, excerpt: f.excerpt, rationale: f.rationale, evidence: f.status === 'NOT' ? 'No evidence evaluated' : f.evidence,
+        show, ariaOpen: show ? 'true' : 'false', chev: show ? ICON.up : ICON.dn, src: f.status !== 'NOT' && photo ? photo.src : '', alt: photo ? photo.label + ' photograph' : '',
+        toggle: () => this.setState((v) => ({ readOpen: { ...v.readOpen, [f.id]: !show }, openId: show ? v.openId : f.id })), viewRule: () => this.gotoRule(f.rule, x.id)
+      };
+    });
+    const span = closed ? fmt(Math.min(max, 40)) : '';
+    return {
+      layout: 'ar-live' + (closed ? ' closed' : '') + (collapsed ? ' collapsed' : ''), showEvidence: !collapsed, evOpen: collapsed ? 'false' : 'true', evToggle: collapsed ? 'Expand' : 'Collapse', evIcon: collapsed ? ICON.dn : ICON.up,
+      evCount: files.length + (files.length === 1 ? ' file' : ' files'),
+      isClosed: closed, isActive: !closed, outcome, outcomeClass: OUTCOME[outcome], reader,
+      facts: [{ k: 'Started', v: x.started }, { k: 'Feed duration', v: span }, { k: 'CAD', v: 'cvs-6000d-48-f1-ac.stp' }, { k: 'Applicable rules', v: this.checks(x).length + ' of ' + (this.state.rules ? this.state.rules.rules.length : 156) }].concat(x.spec ? [{ k: 'Customer specification', v: x.spec.name }] : []),
+      canReplay: closed && t > 0, max: max.toFixed(1), et: et.toFixed(1), playLabel: review && review.playing ? 'Pause replay' : 'Replay evidence', playIcon: review && review.playing ? ICON.pause : ICON.play,
+      videoEmpty: closed ? 'No video received' : 'Awaiting camera', scanEmpty: closed ? 'No scan received' : 'Awaiting laser scan',
+      hasVideo: segs.length > 0, noVideo: segs.length === 0, videoMeta: segs.length ? fmt(Math.min(et, 40)) + ' · camera-01' : 'camera-01 idle',
+      hasScan: chunks.length > 0, noScan: chunks.length === 0, scanSrc: chunks.length >= 14 ? IMG.scan : IMG.partial, scanMeta: chunks.length ? coverage + '% · ' + chunks.length + ' of 18' : 'laser-01 idle',
+      photoMeta: nPhotos + ' of 6', photos,
+      marker: !!(openF && openF.mark), mx: openF && openF.mark ? openF.mark[0] : 0, my: openF && openF.mark ? openF.mark[1] : 0, mlabel: openF && openF.mark ? openF.mark[2] : '',
+      timelineMeta: closed ? fmt(Math.min(et, 40)) + ' of ' + fmt(Math.min(max, 40)) : x.uploads.length ? x.uploads.length + ' uploaded · ' + (t >= 40 ? 'feeder complete' : 'synthetic source') : t >= 40 ? 'Feeder complete' : x.status === 'waiting' ? 'Session open, feeds idle' : 'Synthetic source',
+      showHead: et > 0 && (closed ? !!review : et < 41), head: pctOf(et),
+      tracks: [
+        { label: 'camera-01', ticks: segs.map((a) => ({ x: pctOf(a), c: '#6D8DBA' })), state },
+        { label: 'camera-photos-01', ticks: PHOTOS.filter((p) => p.at <= et).map((p) => ({ x: pctOf(p.at), c: '#D5D8E4' })), state },
+        { label: 'laser-01', ticks: chunks.map((a) => ({ x: pctOf(a), c: '#5AC8D8' })), state },
+        { label: 'analysis', ticks: fs.filter((f) => f.status !== 'NOT').map((f) => ({ x: pctOf(f.at), c: { PASS: COLORS.pass, WARNING: COLORS.warn, FAIL: COLORS.fail, INSUFFICIENT: COLORS.info }[f.status] })).concat(up), state: active && done < checks.length && x.status !== 'waiting' ? (checks.length - done) + ' to run' : x.status === 'waiting' ? 'Idle' : 'Done' }
+      ],
+      steps, stageTitle: stage[0], stageDetail: stage[1], isWaiting: x.status === 'waiting',
+      showMeter: x.status !== 'waiting' && x.status !== 'receiving', pct: Math.round(done / checks.length * 100), meterLabel: done + ' of ' + checks.length + ' applicable rules evaluated',
+      counts: [{ t: c.pass + ' Pass', c: COLORS.pass }, { t: c.warn + ' Warning', c: COLORS.warn }, { t: c.fail + ' Fail', c: c.fail ? COLORS.fail : COLORS.none }].concat(c.insuff ? [{ t: c.insuff + ' Insufficient', c: COLORS.info }] : []).concat(c.none ? [{ t: c.none + ' Not inspected', c: COLORS.none }] : []),
+      findings: items, noFindings: items.length === 0
+    };
+  }
+  rulesVals() {
+    const s = this.state;
+    const filtersOn = !!(s.ruleQ || s.ruleType || s.ruleEv);
+    if (!s.rules) return { ruleStages: [], ruleSecs: [], ruleToc: [], ruleListEmpty: true, ruleEmptyTitle: s.rulesFailed ? 'Rules could not be loaded' : 'Loading rules…', ruleEmptySub: '', ruleTotal: '', ruleListTitle: 'Inspection Rules', ruleListSub: '', filtersOn };
+    const all = s.rules.rules;
+    const groups = s.rules.groups;
+    const q = s.ruleQ.trim();
+    const filtered = all.filter((r) => has(q, r.code, r.title, r.text, r.ref, r.source, r.section)
+      && (!s.ruleType || r.types.includes(s.ruleType) || r.types.includes('All valves'))
+      && (!s.ruleEv || r.evidence.includes(s.ruleEv)));
+    const acrossAll = !!q && !s.rulePicked;
+    const stages = groups.map((g) => {
+      const inG = filtered.filter((r) => r.group === g.id);
+      return {
+        name: g.name, empty: inG.length ? 'false' : 'true', current: !acrossAll && g.id === s.ruleGroup ? 'true' : 'false',
+        line: inG.length + (inG.length === 1 ? ' rule' : ' rules'),
+        pick: () => this.setState({ ruleGroup: g.id, rulePicked: true, ruleSpy: null, ruleJump: 'rsec-0' })
+      };
+    });
+    const group = groups.find((g) => g.id === s.ruleGroup);
+    const secs = [];
+    groups.filter((g) => acrossAll || g.id === s.ruleGroup).forEach((g) => g.sections.forEach((name) => {
+      const rows = filtered.filter((r) => r.group === g.id && r.section === name);
+      if (!rows.length) return;
+      const same = rows.length > 1 && rows.every((r) => r.text === rows[0].text);
+      const reject = rows[0].onfail.startsWith('Reject if') ? rows[0].onfail : '';
+      const dom = 'rsec-' + secs.length;
+      const nocode = g.id === 'release' || rows.every((r) => !r.code);
+      secs.push({
+        dom, name, nocode: nocode ? 'true' : 'false', wide: same ? 'true' : 'false', label: acrossAll ? g.name + ' · ' + name : name, count: rows.length + (rows.length === 1 ? ' rule' : ' rules'), note: [same ? rows[0].text : '', reject].filter(Boolean).join(' '),
+        rows: rows.map((r) => {
+          const open = !!s.ruleOpen[r.id];
+          return {
+            dom: 'rule-' + r.id, code: r.group === 'release' ? '' : r.code, title: r.title, line: same || open ? '' : r.text.split('\n')[0], evidence: r.evidence.join(' · '),
+            open, ariaOpen: open ? 'true' : 'false', chev: open ? ICON.up : ICON.dn,
+            toggle: () => this.setState((v) => ({ ruleOpen: { ...v.ruleOpen, [r.id]: !open } })),
+            text: r.text, onfail: r.onfail, ref: r.ref, source: r.source, types: r.types.join(', '),
+            hasTable: !!r.table, cols: r.table ? r.table.head.length : 1,
+            cells: open && r.table ? r.table.head.map((v) => ({ v, cls: 'h' })).concat(...r.table.rows.map((row) => row.map((v) => ({ v, cls: '' })))) : [],
+            hasMono: !!r.mono, mono: r.mono ? r.mono.join('\n') : ''
+          };
+        })
+      });
+    }));
+    const spy = s.ruleSpy || (secs[0] && secs[0].dom);
+    const shown = secs.reduce((n, v) => n + v.rows.length, 0);
+    return {
+      ruleTotal: all.length, filtersOn, ruleStages: stages, ruleSecs: secs,
+      ruleToc: secs.map((v) => ({ name: v.name, n: v.rows.length, current: v.dom === spy ? 'true' : 'false', pick: () => this.setState({ ruleSpy: v.dom, ruleJump: v.dom }) })),
+      ruleListTitle: acrossAll ? 'Search results' : group.name,
+      ruleListSub: acrossAll ? shown + (shown === 1 ? ' rule matches' : ' rules match') + ' “' + q + '”' : group.summary,
+      ruleListEmpty: secs.length === 0, ruleEmptyTitle: 'No rules match', ruleEmptySub: 'Try a different search or clear the filters.'
+    };
+  }
+  applicableVals(x, fs) {
+    const s = this.state;
+    const lib = s.rules ? s.rules.rules : [];
+    const checks = this.checks(x);
+    const next = x.running ? checks.find((c) => c.at > x.t) : null;
+    const num = (code) => code.split('.').map(Number);
+    const sorted = [...checks].sort((a, b) => num(a.rule)[0] - num(b.rule)[0] || num(a.rule)[1] - num(b.rule)[1]);
+    const rows = sorted.map((c) => {
+      const r = lib.find((v) => v.group === 'visual' && v.code === c.rule) || {};
+      const f = fs.find((v) => v.id === c.id);
+      const open = !!s.appOpen[c.id];
+      const st = f ? f.status : next && next.id === c.id ? 'RUN' : 'PENDING';
+      return {
+        section: r.section || 'Rules', code: c.rule, title: r.title || c.title, line: open ? '' : c.excerpt, evidence: (r.evidence || []).join(' · '), excerpt: c.excerpt, ref: c.ref,
+        status: LABEL[st] || 'Pending', badge: BADGE[st] || 'ar-badge', result: f && f.status !== 'NOT' ? f.title + '. ' + f.caption : '',
+        open, ariaOpen: open ? 'true' : 'false', chev: open ? ICON.up : ICON.dn,
+        toggle: () => this.setState((v) => ({ appOpen: { ...v.appOpen, [c.id]: !open } })), viewRule: () => this.gotoRule(c.rule, x.id)
+      };
+    });
+    const names = [...new Set(rows.map((r) => r.section))];
+    return {
+      funnel: [
+        { n: lib.length || '—', k: 'Rule library', sub: 'All inspection rules', final: 'false' },
+        { n: lib.filter((r) => r.types.includes('All valves')).length || '—', k: 'Match valve type', sub: 'CVS 6000D', final: 'false' },
+        { n: checks.length, k: x.spec ? 'Match customer specification' : 'Baseline for this valve', sub: x.spec ? x.spec.name : 'No specification uploaded', final: 'true' }
+      ],
+      sections: names.map((name) => { const list = rows.filter((r) => r.section === name); return { name, rows: list, count: list.length + (list.length === 1 ? ' rule' : ' rules') }; }),
+      specName: x.spec ? x.spec.name : 'None uploaded', noSpec: !x.spec, canUpload: !x.spec && x.status === 'waiting'
+    };
+  }
+  dossierVals(x, fs, c, o) {
+    const partial = x.closure === 'terminated';
+    const tone = { Pass: ['#0B6B4B', '#FFF'], Warning: ['#FFB547', '#2A1B00'], Fail: ['#8E2318', '#FFF'], Inconclusive: ['#2E3A73', '#FFF'] }[o] || ['#2E3A73', '#FFF'];
+    const ink = { PASS: '#0B6B4B', WARNING: '#7A4900', FAIL: '#8E2318', INSUFFICIENT: '#1F5C8A', NOT: '#4D5365' };
+    const docs = this.docs(x).filter((d) => !d.dossier && !['Specifications'].includes(d.cat));
+    return {
+      partial, title: x.name, conclusion: o.toUpperCase(), bg: tone[0], fg: tone[1],
+      summary: partial ? 'This inspection stopped before all checks ran. It cannot be read as a pass.' : c.none ? 'The inspection ended before all checks ran. The stream is recorded as truncated.' : c.warn ? c.pass + ' checks passed and ' + c.warn + ' need review. No criterion failed.' : 'All checks passed on the evidence received.',
+      totals: [{ n: fs.length - c.none, k: 'Applicable rules evaluated', c: '#12141C' }, { n: c.pass, k: 'Pass', c: ink.PASS }, { n: c.warn, k: 'Warning', c: ink.WARNING }, { n: c.fail, k: 'Fail', c: ink.FAIL }, { n: c.none + c.insuff, k: 'Insufficient or not inspected', c: ink.NOT }],
+      ident: [{ k: 'Inspection ID', v: x.id }, { k: 'Lifecycle status', v: x.status }, { k: 'Started', v: x.started }, { k: 'Closed', v: x.closed || 'Finalizing' }, { k: 'Operator action', v: partial ? 'terminated' : 'normal_close' }].concat(x.reason ? [{ k: 'Reason', v: x.reason }] : []).concat(x.spec ? [{ k: 'Customer specification', v: x.spec.name }] : []),
+      baseline: [{ k: 'CAD', v: 'cvs-6000d-48-f1-ac.stp · ' + hash('cad') }, { k: 'Applicable rules', v: this.checks(x).length + ' selected from valve type' + (x.spec ? ' and customer specification' : '') + ' · ' + hash('rules') }, { k: 'Governing standards', v: 'ASME B16.34, B16.5, B16.47, B16.10, B16.25, B16.11, ASME B1.20.1, MSS SP-25, MSS SP-55' }],
+      findings: fs.map((f) => ({ status: LABEL[f.status], c: ink[f.status], title: f.title, caption: f.caption, rule: f.rule })),
+      evidence: docs.slice(0, 6).map((d) => ({ when: d.when, kind: d.kind, name: d.name, hash: hash(d.name) })),
+      evidenceNote: docs.length + ' files received. First six shown. All are listed under Documents.',
+      notes: [{ t: x.t >= 40 ? 'Feeder completed at 00:40.' : 'No producer-complete signal. Stream truncated at ' + fmt(x.t) + '.' }, { t: partial ? 'Terminate Now confirmed by the operator.' : 'End Inspection confirmed by the operator.' }, { t: 'Findings do not establish crack depth, leak tightness or bolt torque.' }, { t: 'All simulated evidence is marked synthetic.' }]
+    };
+  }
+  renderVals() {
+    const s = this.state;
+    const nav = (v) => (s.view === v ? 'page' : 'false');
+    const list = s.inspections.map((x) => { const fs = this.findings(x); const c = this.counts(fs); return { x, fs, c, o: this.outcome(x, c) }; });
+    const group = (x) => (['completed'].includes(x.status) ? 'Completed' : x.status === 'terminated' ? 'Terminated' : 'Active');
+    const inHome = list.filter((v) => has(s.homeQ, v.x.name, v.x.id));
+    const homeRows = inHome.filter((v) => s.homeFilter === 'All' || group(v.x) === s.homeFilter).map((v) => ({
+      id: v.x.id, name: v.x.name, started: v.x.started, status: SESSION[v.x.status][0], statusClass: SESSION[v.x.status][1], outcome: v.o, outcomeClass: OUTCOME[v.o],
+      counts: this.countsText(v.c), bar: this.bar(v.c), open: () => this.open(v.x)
+    }));
+    const chips = (names, count, cur, key) => names.map((n) => ({ label: n, n: count(n), on: cur === n ? 'true' : 'false', pick: () => this.setState({ [key]: n }) }));
+    const closed = list.filter((v) => ['completed', 'terminated'].includes(v.x.status));
+    const inRep = closed.filter((v) => has(s.repQ, v.x.name, v.x.id, v.o));
+    const repRows = inRep.filter((v) => s.repFilter === 'All' || v.o === s.repFilter).map((v) => ({
+      id: v.x.id, name: v.x.name, closed: v.x.closed, type: v.x.closure === 'terminated' ? 'Partial' : 'Full', outcome: v.o, outcomeClass: OUTCOME[v.o], counts: this.countsText(v.c),
+      view: () => this.open(v.x, 'dossier'), download: () => this.saveDossier(v.x)
+    }));
+    const cur = list.find((v) => v.x.id === s.activeId);
+    const out = {
+      ic: ICON, img: IMG,
+      isHome: s.view === 'home', isReports: s.view === 'reports', isRules: s.view === 'rules', isInspection: s.view === 'inspection' && !!cur,
+      navHome: nav('home'), navReports: nav('reports'), navRules: nav('rules'),
+      goHome: () => this.setState({ view: 'home', activeId: null }), goReports: () => this.setState({ view: 'reports', activeId: null }), goRules: () => this.setState({ view: 'rules', activeId: null, backId: null }),
+      homeQ: s.homeQ, onHomeQ: (e) => this.setState({ homeQ: e.target.value }), homeRows, homeEmpty: homeRows.length === 0,
+      homeChips: chips(['All', 'Active', 'Completed', 'Terminated'], (n) => inHome.filter((v) => n === 'All' || group(v.x) === n).length, s.homeFilter, 'homeFilter'),
+      startName: s.startName, onStartName: (e) => this.setState({ startName: e.target.value }),
+      noStartSpec: !s.startSpec, hasStartSpec: !!s.startSpec, startSpecName: s.startSpec ? s.startSpec.name : '', startSpecSize: s.startSpec ? size(s.startSpec.bytes) : '',
+      onStartSpec: (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) this.setState({ startSpec: { name: f.name, bytes: f.size, file: f } }); },
+      clearStartSpec: () => this.setState({ startSpec: null }),
+      startDisabled: !s.startName.trim(),
+      startInspection: () => {
+        const stamp = new Date().toTimeString().slice(0, 5);
+        const x = { id: 'insp-' + s.seq, name: s.startName.trim(), started: '02 Nov 2026, ' + stamp, status: 'waiting', t: 0, spec: s.startSpec, uploads: [] };
+        this.setState({ inspections: [x, ...s.inspections], seq: s.seq + 1, startName: '', startSpec: null, view: 'inspection', activeId: x.id, tab: 'live', openId: undefined });
+      },
+      repQ: s.repQ, onRepQ: (e) => this.setState({ repQ: e.target.value }), repRows, repEmpty: repRows.length === 0,
+      repChips: chips(['All', 'Pass', 'Warning', 'Fail', 'Inconclusive'], (n) => inRep.filter((v) => n === 'All' || v.o === n).length, s.repFilter, 'repFilter'),
+      ruleQ: s.ruleQ, onRuleQ: (e) => this.setState({ ruleQ: e.target.value, rulePicked: false, ruleSpy: null }), ruleType: s.ruleType, onRuleType: (e) => this.setState({ ruleType: e.target.value, ruleSpy: null }),
+      ruleEv: s.ruleEv, onRuleEv: (e) => this.setState({ ruleEv: e.target.value, ruleSpy: null }),
+      clearRuleFilters: () => this.setState({ ruleQ: '', ruleType: '', ruleEv: '', rulePicked: false, ruleSpy: null }),
+      onRuleScroll: (e) => {
+        const box = e.currentTarget; const top = box.getBoundingClientRect().top; let cur = null;
+        box.querySelectorAll('.ar-rsec').forEach((el) => { if (el.getBoundingClientRect().top - top <= 64) cur = el.id; });
+        if (cur && cur !== this.state.ruleSpy) this.setState({ ruleSpy: cur });
+      },
+      hasBack: !!s.backId, backName: (s.inspections.find((x) => x.id === s.backId) || {}).name, backToInspection: () => { const x = s.inspections.find((v) => v.id === s.backId); this.setState({ backId: null }); this.open(x, this.state.tab); },
+      ...this.rulesVals(),
+      dialogEnd: s.dialog === 'end', dialogTerminate: s.dialog === 'terminate', closeDialog: () => this.setState({ dialog: null }),
+      termReason: s.termReason, onTermReason: (e) => this.setState({ termReason: e.target.value }),
+      hasToast: !!s.toast, toastText: s.toast ? s.toast.text : '', toastAction: s.toast ? s.toast.action : '', toastGo: () => { const g = s.toast && s.toast.go; this.setState({ toast: null }); if (g) g(); },
+      i: {}, tabs: [], tabLive: false, tabRules: false, tabDocs: false, tabDossier: false, live: {}, dos: {}, app: {}, docRows: [], docChips: [],
+      toggleEv: () => this.setState({ evCollapsed: !s.evCollapsed }), openDossier: () => this.setState({ tab: 'dossier' })
+    };
+    if (cur) {
+      const x = cur.x; const active = ACTIVE.includes(x.status);
+      const docs = this.docs(x);
+      const closedNow = ['completed', 'terminated'].includes(x.status);
+      const tab = !closedNow && s.tab === 'dossier' ? 'live' : s.tab;
+      const tabs = (closedNow ? [['live', 'Inspection', ''], ['rules', 'Applicable Rules', this.checks(x).length], ['documents', 'Documents', docs.length], ['dossier', 'Dossier', '']] : [['live', 'Live', ''], ['rules', 'Applicable Rules', this.checks(x).length], ['documents', 'Documents', docs.length]]);
+      const replayMax = Math.min(x.t, 41);
+      const inDocs = docs.filter((d) => has(s.docQ, d.name, d.kind, d.source));
+      const docRows = inDocs.filter((d) => s.docFilter === 'All' || d.cat === s.docFilter).map((d) => ({
+        name: d.name, kind: d.kind, source: d.source, size: size(d.bytes), when: d.when, src: d.src || '', noSrc: !d.src, icon: d.icon, download: () => this.saveDoc(d, x)
+      }));
+      const cats = ['All', 'Reports', 'Specifications', 'Uploaded', 'Video', 'Photographs', 'Point clouds'].filter((n) => n === 'All' || docs.some((d) => d.cat === n));
+      Object.assign(out, {
+        i: { name: x.name, id: x.id, status: SESSION[x.status][0], statusClass: SESSION[x.status][1], active, endClass: x.status === 'ready' ? 'ar-btn primary' : 'ar-btn secondary' },
+        copyId: () => { try { navigator.clipboard.writeText(x.id).then(() => this.say('Copied ' + x.id), () => this.say('Session ID: ' + x.id)); } catch (e) { this.say('Session ID: ' + x.id); } },
+        runFeed: () => this.patch(x.id, { running: true, status: 'receiving', t: 0.4 }),
+        onEvidence: (e) => {
+          const files = [...e.target.files]; e.target.value = '';
+          if (!files.length) return;
+          const when = fmt(x.t);
+          this.patch(x.id, { uploads: [...x.uploads, ...files.map((f) => ({ name: f.name, bytes: f.size, file: f, when, at: x.t }))] });
+          this.say(files.length === 1 ? files[0].name + ' added to Documents' : files.length + ' files added to Documents', 'View', () => this.setState({ tab: 'documents' }));
+        },
+        onInspectionSpec: (e) => {
+          const f = e.target.files[0]; e.target.value = '';
+          if (!f) return;
+          this.patch(x.id, { spec: { name: f.name, bytes: f.size, file: f } });
+          this.say('Applicable rules updated from ' + f.name);
+        },
+        askEnd: () => this.setState({ dialog: 'end' }), askTerminate: () => this.setState({ dialog: 'terminate' }),
+        dialogTruncated: x.t < 40,
+        confirmEnd: () => this.finalize(x, { closure: 'normal' }, 'Dossier generated'),
+        confirmTerminate: () => this.finalize(x, { closure: 'terminated', reason: s.termReason.trim() }, 'Partial dossier generated'),
+        downloadDossier: () => this.saveDossier(x),
+        togglePlay: () => this.setState((v) => {
+          const r = v.review;
+          if (r && r.playing) return { review: { ...r, playing: false } };
+          return { review: { t: r && r.t < replayMax ? r.t : 0.4, max: replayMax, playing: true } };
+        }),
+        onScrub: (e) => this.setState({ review: { t: Number(e.target.value), max: replayMax, playing: false } }),
+        tabs: tabs.map(([id, label, n]) => ({ label, n, on: tab === id ? 'true' : 'false', pick: () => this.setState({ tab: id }) })),
+        tabLive: tab === 'live', tabRules: tab === 'rules', tabDocs: tab === 'documents', tabDossier: tab === 'dossier',
+        docQ: s.docQ, onDocQ: (e) => this.setState({ docQ: e.target.value }), docRows, docEmpty: docRows.length === 0,
+        docChips: chips(cats, (n) => inDocs.filter((d) => n === 'All' || d.cat === n).length, s.docFilter, 'docFilter')
+      });
+      if (tab === 'live') out.live = this.liveVals(x, cur.fs, s.openId, docs, cur.o);
+      if (tab === 'rules') out.app = this.applicableVals(x, cur.fs);
+      if (tab === 'dossier') out.dos = this.dossierVals(x, cur.fs, cur.c, cur.o);
+    }
+    return out;
+  }
+}
+</script>
+</body>
+</html>
