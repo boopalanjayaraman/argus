@@ -63,9 +63,9 @@ When an internal geometric mismatch, incorrect seat alloy, or porosity slips thr
 
 ### What We Are Building: Argus
 
-**Argus** is a blueprint-driven visual inspection brain designed specifically for high-mix, zero-training-data environments.
+**Argus is autonomous, continuous inspection AI for engineer-to-order equipment.** It does not wait for a single final check before delivery: it inspects the same asset again and again as it is built — at intake, during machining and assembly, after finishing, and before dispatch — each time against the CAD and the rules that apply at that stage, so a deviation is caught at the stage where it appears, not after the valve is sealed, painted and on the test bench.
 
-Instead of training on historical defects, Argus inspects against **Design Intent** by bridging spatial perception with engineering standards:
+It is a blueprint-driven visual inspection brain designed specifically for high-mix, zero-training-data environments. Instead of training on historical defects, Argus inspects against **Design Intent** by bridging spatial perception with engineering standards:
 
 * **Ingesting Context (Muse Wonder):** Directly processes customer design requirements, CAD metadata, and full 200+ page manufacturer works standards (e.g., DIN/ASME specifications, 1.1.1 assembly instructions derived from a german OEM Manufacturer) inside a 1-million-token context window.
 
@@ -79,26 +79,31 @@ Instead of training on historical defects, Argus inspects against **Design Inten
 
 ---
 
-### Shifting Left: Progressive Quality Gates
+### Continuous, Multi-Stage Inspection Across the ETO Build
 
-Rather than serving as a single final inspection checkpoint, Argus operates across manufacturing milestones to catch discrepancies when they are cheapest to resolve:
-
-```
-[ Gate 1: Intake / Raw Casting ] ──► [ Gate 2: In-Process Assembly ] ──► [ Gate 3: Acceptance Testing ]
-  Cost to resolve: ~$1,000             Cost to resolve: ~$5,000            Cost to resolve: ~$150,000+
-  (Reject raw casting before CNC)      (Rework seat weld/fasteners)        (Full teardown & re-test)
+In ETO manufacturing an asset changes shape and state many times before it ships: a raw casting becomes a machined body, then a sub-assembly, then a sealed, painted and nameplated valve. A one-time final inspection sees only the last state — by then, most of what went wrong is hidden inside the assembly or under the paint. Argus inspects **at every stage**, automatically, every time new evidence arrives:
 
 ```
+[ Intake / Raw casting ] ─► [ Machining ] ─► [ Sub-assembly ] ─► [ Final assembly ] ─► [ Finish & nameplate ] ─► [ Test & dispatch ]
+   casting CAD              machined CAD      sub-assembly CAD     full-assembly CAD      as-built CAD + order       test records
 
-1. **Gate 1 (Raw Casting & Machining Intake):** Scans the incoming casting against the CAD model before machining starts, catching dimensional shortages or casting voids before wasting 40 hours of CNC milling ($1,000 fix).
+Cost to resolve:  ~$1,000 at intake  ·  ~$5,000 during assembly  ·  ~$150,000+ after acceptance testing (teardown)
+```
 
+At each stage Argus:
 
-2. **Gate 2 (In-Process Assembly & Fasteners):** Verifies internal seat ring alloy markings, tool part numbers, and stud bolt grades (`ASTM A193 B7`) before the bonnet is torqued shut ($5,000 fix).
+1. **Uses the CAD for that stage.** The comparison reference is the design as it should exist *at that point* — the casting before machining, the sub-assembly before the bonnet closes, the full assembly at the end — not only the final drawing.
+2. **Applies the rules that belong to that stage.** Casting and machining checks early; fasteners, seat and trim during assembly; paint, nameplate, end protection and documentation at finish; test-record rules at dispatch. Rules for later stages are not failed early — a missing face protector during build is expected, at dispatch it is a finding.
+3. **Evaluates continuously while the stage runs.** Camera video, close-up photographs and laser scans stream in; findings appear live as each item is analysed, and the operator closes the stage when the evidence is complete.
+4. **Carries open issues forward.** A suspected hairline raised at machining stays open until a later stage's evidence clears or confirms it, so the final dossier shows the asset's whole inspection history — what was raised, where, and how it was resolved.
 
+Why it pays to inspect early (shifting left):
 
-3. **Gate 3 (Unattended Test Cell):** Operates inside enclosed pressure bays to track ASME Class VI submerged bubble leak rates and stem stroke travel automatically while the technician steps away ($150,000+ saved).
+1. **Intake (raw casting & machining):** scans the incoming casting against its CAD before machining starts, catching dimensional shortages or casting voids before 40 hours of CNC milling are wasted (~$1,000 fix).
+2. **In-process assembly & fasteners:** verifies seat ring markings, part numbers, stud bolt grades (`ASTM A193 B7`) and bolting before the bonnet is torqued shut (~$5,000 fix).
+3. **Finish & dispatch:** checks paint, nameplate data against the order, face protection and documentation before the unit leaves; at the test cell, tracks leak and stroke tests against recorded results (~$150,000+ teardown avoided).
 
-
+**In the hackathon demo**, the same 48-inch CVS 6000D swing check valve is inspected at two stages against the same CAD: **Scenario 1 — during build** (grey, before finishing, no nameplate yet) and **Scenario 2 — finished** (painted and nameplated). Argus evaluates each stage on its own evidence, and the finished stage surfaces what the build stage could not yet show — for example a nameplate that does not match the work order. Linking stages under one asset, stage-specific CAD and per-stage rule applicability are the next step after the hackathon build.
 
 ---
 

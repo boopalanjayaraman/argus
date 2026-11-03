@@ -2,7 +2,7 @@
     "cad_models": [
         {
             "model_id": "CVS6000_VALVE",
-            "display_name": "CVS 6000D — Blue Valve",
+            "display_name": "Scenario 1 - CVS 6000D, 5 Ton, 48\" Valve - During Build",
             "revision": "demo-1",
             "family": "Valve",
             "type": "swing_check",
@@ -14,7 +14,7 @@
         },
         {
             "model_id": "CVS3000_VALVE",
-            "display_name": "CVS 3000 — Finished Valve (painted, nameplated)",
+            "display_name": "Scenario 2 - CVS 6000D — 5 Ton, 48\" Finished Valve (painted, nameplated)",
             "revision": "demo-1",
             "family": "Valve",
             "type": "swing_check",
