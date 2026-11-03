@@ -48,12 +48,36 @@ def _fpfh(pcd, voxel):
 
 
 def register(scan_path: str, cad_path: str | None = None, voxel: float = VOXEL) -> dict:
+    if not os.path.exists(scan_path):
+        return {"status": "insufficient", "reason": f"scan not found: {scan_path}"}
+    return _register_cloud(load_cloud(scan_path, voxel), cad_path, voxel)
+
+
+def register_merged(scan_paths: list[str], cad_path: str | None = None, voxel: float = VOXEL) -> dict:
+    """Register the merged scan (all chunks of a session) against the CAD
+    reference. Coverage is only meaningful on the merged cloud: one chunk
+    is one scanner sweep and sees only a slice of the surface."""
+    merged = o3d.geometry.PointCloud()
+    loaded = 0
+    for path in scan_paths:
+        if not path or not os.path.exists(path):
+            continue
+        merged += o3d.io.read_point_cloud(path)
+        loaded += 1
+    if loaded == 0:
+        return {"status": "insufficient", "reason": "no readable scan chunks"}
+    if voxel and len(merged.points) > 0:
+        merged = merged.voxel_down_sample(voxel)
+    merged.estimate_normals(o3d.geometry.KDTreeSearchParamHybrid(radius=voxel * 2 if voxel else 10, max_nn=30))
+    result = _register_cloud(merged, cad_path, voxel)
+    result["mergedChunks"] = loaded
+    return result
+
+
+def _register_cloud(scan, cad_path: str | None = None, voxel: float = VOXEL) -> dict:
     cad_path = cad_path or CAD_REFERENCE_PLY
     if not cad_path or not os.path.exists(cad_path):
         return {"status": "insufficient", "reason": "CAD reference point cloud not configured (CAD_REFERENCE_PLY)"}
-    if not os.path.exists(scan_path):
-        return {"status": "insufficient", "reason": f"scan not found: {scan_path}"}
-    scan = load_cloud(scan_path, voxel)
     cad = load_cloud(cad_path, voxel)
     if len(scan.points) < 100 or len(cad.points) < 100:
         return {"status": "insufficient", "reason": "too few points after downsampling"}
@@ -83,17 +107,24 @@ def register(scan_path: str, cad_path: str | None = None, voxel: float = VOXEL) 
     aligned = o3d.geometry.PointCloud(scan)
     aligned.transform(icp.transformation)
     cad_tree = o3d.geometry.KDTreeFlann(cad)
-    dists = []
+    # Deviation is point-to-plane: the signed distance along the CAD surface
+    # normal. Unsigned nearest-point distance would mostly measure the CAD
+    # reference's own point spacing, not deviation from the surface.
     cad_pts = np.asarray(cad.points)
-    covered = np.zeros(len(cad_pts), dtype=bool)
-    for i, p in enumerate(np.asarray(aligned.points)):
+    cad_normals = np.asarray(cad.normals)
+    signed = []
+    for p in np.asarray(aligned.points):
         k, idx, d2 = cad_tree.search_knn_vector_3d(p, 1)
         if k:
-            dists.append(float(np.sqrt(d2[0])))
-            if d2[0] <= MAX_CORR ** 2:
-                covered[idx[0]] = True
-    dists = np.array(dists) if dists else np.array([0.0])
-    rmse = float(np.sqrt(np.mean(dists ** 2)))
+            signed.append(float(np.dot(p - cad_pts[idx[0]], cad_normals[idx[0]])))
+    signed = np.array(signed) if signed else np.array([0.0])
+    # Coverage is asked of the CAD surface: a CAD point is covered when the
+    # scan comes within MAX_CORR of it. (Marking each scan point's nearest
+    # CAD point instead undercounts wherever scan points cluster.)
+    cad_to_scan = np.asarray(cad.compute_point_cloud_distance(aligned)) if len(aligned.points) else np.array([1e9])
+    covered = cad_to_scan <= MAX_CORR
+    dists = np.abs(signed)
+    rmse = float(np.sqrt(np.mean(signed ** 2)))
     valid = rmse <= float(os.environ.get("GEO_REGISTRATION_MAX_RMSE_MM", "2.0")) * 10  # coarse-cloud scale; gate re-checks at rule level
     return {
         "status": "valid" if icp.fitness > 0.1 else "insufficient",

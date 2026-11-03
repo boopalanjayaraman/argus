@@ -28,6 +28,46 @@ type Rule = any;
 const cadModels = JSON.parse(fs.readFileSync(path.join(root, 'src/cad_models.json'), 'utf8')).cad_models;
 const rulePack = JSON.parse(fs.readFileSync(path.join(root, 'src/reference-data/cvs6000d-48-demo/rules/rules.json'), 'utf8'));
 
+
+/** Stride-sample a binary PLY to at most `max` vertices (header rewritten). */
+export function samplePlyBuffer(data: Buffer, max: number): Buffer {
+  const headerEnd = data.indexOf('end_header\n');
+  if (headerEnd < 0) return data;
+  const head = data.subarray(0, headerEnd).toString('ascii');
+  const countMatch = head.match(/element vertex (\d+)/);
+  if (!countMatch) return data;
+  const total = Number(countMatch[1]);
+  const sizes: Record<string, number> = { char: 1, uchar: 1, int8: 1, uint8: 1, short: 2, ushort: 2, int16: 2, uint16: 2, int: 4, uint: 4, int32: 4, uint32: 4, float: 4, float32: 4, double: 8, float64: 8 };
+  let stride = 0; let inVertex = false;
+  for (const line of head.split('\n')) {
+    if (line.startsWith('element ')) { inVertex = line.split(/\s+/)[1] === 'vertex'; continue; }
+    if (inVertex && line.startsWith('property ')) stride += sizes[line.split(/\s+/)[1]] || 0;
+  }
+  if (!stride || total <= max) return data;
+  const bodyStart = headerEnd + 'end_header\n'.length;
+  const step = Math.ceil(total / max);
+  const kept = Math.ceil(total / step);
+  const header = head.replace(/element vertex \d+/, `element vertex ${kept}`) + 'end_header\n';
+  const parts: Buffer[] = [Buffer.from(header, 'ascii')];
+  for (let i = 0; i < total; i += step) parts.push(data.subarray(bodyStart + i * stride, bodyStart + (i + 1) * stride));
+  return Buffer.concat(parts);
+}
+
+/** Locate the generated CAD reference cloud for a model (matched by CAD sha). */
+export function cadReferencePath(model: any): string | null {
+  const base = path.join(root, 'src/reference-data');
+  try {
+    for (const dir of fs.readdirSync(base)) {
+      const metaFile = path.join(base, dir, 'cad', 'cad_reference.json');
+      const plyFile = path.join(base, dir, 'cad', 'cad_reference.ply');
+      if (!fs.existsSync(metaFile) || !fs.existsSync(plyFile)) continue;
+      const meta = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
+      if (meta.sourceCadSha256 === model.sha256) return plyFile;
+    }
+  } catch {}
+  return null;
+}
+
 /** Inspection Rules library: parsed live from src/inspection_rules/*.md.
  * Each markdown file is one rule document; individual checkable rules are
  * extracted from `ID: text` lines (NP-001, TAG-001, CRN-001, ...) and from
@@ -161,6 +201,32 @@ function refresh(insp: any) {
   const cc = (s: string) => sts.filter((x: string) => x === s).length;
   insp.findings = { pass: cc('PASS'), warning: cc('WARNING'), fail: cc('FAIL'), insufficient: cc('INSUFFICIENT_EVIDENCE'), unchecked: cc('NOT_INSPECTED'), total: sts.length };
 }
+
+
+/** Stream order for video segments: sequence, then capture time. */
+export function orderVideos(evidences: any[]): any[] {
+  return evidences.filter((e: any) => e.mediaType === 'video')
+    .sort((a: any, b: any) => (a.sequence || 0) - (b.sequence || 0) || (a.relativeTimeMs || 0) - (b.relativeTimeMs || 0) || String(a.eventId).localeCompare(String(b.eventId)));
+}
+
+/** Parse a single Range header; returns null when absent/invalid. */
+export function parseRange(header: string | undefined, size: number): { start: number; end: number } | null {
+  if (!header) return null;
+  const m = header.match(/^bytes=(\d*)-(\d*)$/);
+  if (!m) return null;
+  const start = m[1] ? Number(m[1]) : 0;
+  const end = m[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
+  if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= size) return null;
+  return { start, end };
+}
+
+/** Best (highest-fitness) geometry registration from orchestrator observations. */
+export function pickRegistration(observations: any[]): any | null {
+  const regs = (observations || []).filter((o: any) => o?.registration).map((o: any) => ({ ...o.registration, evidenceEventId: o.evidence?.eventId || o.eventId || null }));
+  if (!regs.length) return null;
+  return regs.sort((a: any, b: any) => (b.fitness || 0) - (a.fitness || 0))[0];
+}
+
 function analyze(insp: any, ev: any) {
   // Coordinator (mirrors src/services/inspection/coordinator.py gate): evidence receipt alone
   // creates ANALYZING then INSUFFICIENT_EVIDENCE unless qualified observations exist.
@@ -194,6 +260,13 @@ export async function buildServer() {
   const app = Fastify();
   await app.register(multipart, { limits: { fileSize: 200 * 1024 * 1024 } });
   app.get('/api/v1/health', async () => ({ ok: true, storage: storageMode }));
+  app.get('/api/v1/cad-models/:model_id/reference.ply', async (req: any, reply) => {
+    const model = cadModels.find((m: any) => m.model_id === req.params.model_id);
+    const file = model && cadReferencePath(model);
+    if (!file) return reply.code(404).send({ error: 'no CAD reference for model' });
+    const max = Math.min(Math.max(Number(req.query.sample) || 80000, 1000), 680000);
+    return reply.type('application/octet-stream').send(samplePlyBuffer(fs.readFileSync(file), max));
+  });
   app.get('/api/v1/cad-models', async () => ({ cad_models: cadModels }));
   app.get('/api/v1/instruction-sets', async () => loadInspectionRules());
   app.get('/api/v1/rule-pack', async () => ({ packId: rulePack.packId, rules: rulePack.rules, counts: { total: rulePack.rules.length } }));
@@ -216,9 +289,75 @@ export async function buildServer() {
     return { inspections: list, counts: { total: list.length, active: list.filter((i: any) => !['COMPLETED', 'TERMINATED'].includes(i.lifecycleStatus)).length, completed: list.filter((i: any) => i.lifecycleStatus === 'COMPLETED').length, terminated: list.filter((i: any) => i.lifecycleStatus === 'TERMINATED').length } };
   });
   const getInsp = (id: string) => db.inspections.find((i: any) => i.id === id);
+
+  const INSPECTION_URL = process.env.INSPECTION_SERVICE_URL || 'http://localhost:8100';
+  const EVIDENCE_BASE = process.env.EVIDENCE_BASE_URL || 'http://localhost:8000';
+  async function runComparison(insp: any) {
+    const pcs = db.evidence.filter((e: any) => e.sessionId === insp.id && e.mediaType === 'pointcloud');
+    if (!pcs.length) { insp.geometry = { status: 'insufficient', reason: 'No point-cloud chunks received', at: new Date().toISOString() }; saveDB(db); return; }
+    insp.geometry = { status: 'running', chunks: pcs.length, at: new Date().toISOString() }; saveDB(db);
+    try {
+      const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 240000);
+      const resp = await fetch(`${INSPECTION_URL}/compare-merged`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
+        body: JSON.stringify({ sessionId: insp.id, model_id: insp.model_id, evidences: pcs.map((e: any) => ({ eventId: e.eventId, evidenceId: e.evidenceId, mediaType: 'pointcloud', filename: e.filename, url: `${EVIDENCE_BASE}/api/v1/inspections/${insp.id}/evidence/${e.evidenceId}/file` })) }) });
+      clearTimeout(timer);
+      if (!resp.ok) throw new Error(`orchestrator ${resp.status}`);
+      const data: any = await resp.json();
+      const reg = data.observation?.registration || pickRegistration(data.observations || []);
+      insp.geometry = reg ? { status: reg.status, rmseMm: reg.rmseMm, fitness: reg.fitness, coverage: reg.surfaceCoverageFraction, meanDeviationMm: reg.meanDeviationMm, scanPoints: reg.scanPoints, cadPoints: reg.cadPoints, chunks: pcs.length, at: new Date().toISOString() }
+                          : { status: 'insufficient', reason: 'No geometry observation returned', chunks: pcs.length, at: new Date().toISOString() };
+      logger.info('geometry.compared', { sessionId: insp.id, status: insp.geometry.status, rmseMm: insp.geometry.rmseMm, coverage: insp.geometry.coverage });
+    } catch (e: any) {
+      insp.geometry = { status: 'unavailable', reason: String(e?.message || e), chunks: pcs.length, at: new Date().toISOString() };
+      logger.info('geometry.unavailable', { sessionId: insp.id, reason: insp.geometry.reason });
+    }
+    emit(db, insp.id, 'geometry.compared', { status: insp.geometry.status }); saveDB(db);
+  }
   app.get('/api/v1/inspections/:id', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } }); refresh(i); return i; });
   app.get('/api/v1/inspections/:id/rules', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); return { cascade: { library: rulePack.rules.length, valveType: rulePack.rules.filter((r: any) => r.applicability !== 'REFERENCE_ONLY').length, customerSpec: rulePack.rules.filter((r: any) => r.applicability === 'APPROVED').length }, rules: sessionRules(i), why: `Selected by model_id ${i.model_id} from pinned pack ${rulePack.packId}; customer spec overrides disclosed in session snapshot.` }; });
   app.get('/api/v1/inspections/:id/evidence', async (req: any) => db.evidence.filter((e: any) => e.sessionId === req.params.id));
+
+  const mergedInFlight = new Map<string, Promise<string>>();
+  async function mergedVideoFile(insp: any): Promise<string> {
+    const vids = orderVideos(db.evidence.filter((e: any) => e.sessionId === insp.id));
+    if (!vids.length) throw new Error('no video evidence');
+    const sig = `${vids.length}-${vids[vids.length - 1].evidenceId}-${vids.reduce((s: number, e: any) => s + (e.size || 0), 0)}`;
+    const dir = path.join(DATA, 'merged'); fs.mkdirSync(dir, { recursive: true });
+    const out = path.join(dir, `${insp.id}-${sig}.mp4`);
+    if (fs.existsSync(out)) return out;
+    if (mergedInFlight.has(out)) return mergedInFlight.get(out)!;
+    const job = (async () => {
+      const { execFile } = await import('node:child_process');
+      const run = (args: string[]) => new Promise<void>((resolve, reject) => execFile('ffmpeg', args, (err) => err ? reject(err) : resolve()));
+      const listFile = path.join(dir, `${insp.id}-${sig}.txt`);
+      const lines = vids.map((e: any) => `file '${path.join(DATA, 'evidence', e.sessionId, `${e.evidenceId}-${e.filename}`).replace(/'/g, `'\\''`)}'`).join('\n');
+      fs.writeFileSync(listFile, lines);
+      const tmp = `${out}.tmp.mp4`;
+      try { await run(['-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', tmp]); }
+      catch { await run(['-y', '-v', 'error', '-f', 'concat', '-safe', '0', '-i', listFile, '-c:v', 'libx264', '-preset', 'veryfast', '-an', tmp]); }
+      fs.renameSync(tmp, out);
+      fs.rmSync(listFile, { force: true });
+      logger.info('video.merged', { sessionId: insp.id, segments: vids.length });
+      return out;
+    })();
+    mergedInFlight.set(out, job);
+    try { return await job; } finally { mergedInFlight.delete(out); }
+  }
+  app.get('/api/v1/inspections/:id/video/merged', async (req: any, reply) => {
+    const insp = getInsp(req.params.id);
+    if (!insp) return reply.code(404).send({ error: 'not found' });
+    let file: string;
+    try { file = await mergedVideoFile(insp); }
+    catch (e: any) { return reply.code(503).send({ error: `merged video unavailable: ${e?.message || e}` }); }
+    const size = fs.statSync(file).size;
+    const range = parseRange(req.headers.range, size);
+    reply.type('video/mp4').header('Accept-Ranges', 'bytes');
+    if (range) {
+      return reply.code(206).header('Content-Range', `bytes ${range.start}-${range.end}/${size}`).header('Content-Length', range.end - range.start + 1)
+        .send(fs.createReadStream(file, { start: range.start, end: range.end }));
+    }
+    return reply.header('Content-Length', size).send(fs.createReadStream(file));
+  });
   app.get('/api/v1/inspections/:id/evidence/:evidenceId/file', async (req: any, reply) => {
     const ev = db.evidence.find((e: any) => e.sessionId === req.params.id && e.evidenceId === req.params.evidenceId);
     if (!ev) return reply.code(404).send({ error: 'evidence not found' });
@@ -275,7 +414,8 @@ export async function buildServer() {
   app.post('/api/v1/inspections/:id/video', upload('video'));
   app.post('/api/v1/inspections/:id/photos', upload('photo'));
   app.post('/api/v1/inspections/:id/pointcloud', upload('pointcloud'));
-  app.post('/api/v1/inspections/:id/complete', async (req: any, reply) => { if (!ingestAuthorized(req)) return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Valid ingest token required' } }); const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); i.producerComplete = true; if (i.lifecycleStatus === 'RECEIVING') i.lifecycleStatus = 'READY_TO_CLOSE'; emit(db, i.id, 'source.complete', {}); saveDB(db); return { ok: true, sessionOpen: true }; });
+  app.post('/api/v1/inspections/:id/complete', async (req: any, reply) => { if (!ingestAuthorized(req)) return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Valid ingest token required' } }); const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); i.producerComplete = true; if (i.lifecycleStatus === 'RECEIVING') i.lifecycleStatus = 'READY_TO_CLOSE'; emit(db, i.id, 'source.complete', {}); saveDB(db); void runComparison(i); return { ok: true, sessionOpen: true }; });
+  app.post('/api/v1/inspections/:id/compare', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); void runComparison(i); return { ok: true, status: 'running' }; });
   const close = (terminated: boolean) => async (req: any, reply: any) => {
     const insp = getInsp(req.params.id); if (!insp) return reply.code(404).send({ error: 'not found' });
     insp.lifecycleStatus = terminated ? 'TERMINATED' : 'COMPLETED'; insp.closedAt = new Date().toISOString();

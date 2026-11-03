@@ -12,6 +12,7 @@ RUN cd src/apps/web && npm run build && cd ../api && npm run build
 FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production PORT=8000
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/src/apps/api/package.json /app/src/apps/api/package-lock.json src/apps/api/
 RUN cd src/apps/api && npm ci --omit=dev
 COPY --from=build /app/src/apps/api/dist src/apps/api/dist

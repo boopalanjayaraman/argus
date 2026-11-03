@@ -4,6 +4,7 @@ Orchestrator + independent sub-agents (agents.py): each evidence event is
 routed to the one sub-agent that owns its media type; independent events run
 in parallel; all outcomes log under the shared session context.
 """
+import json
 import os
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -76,6 +77,33 @@ async def analyze_evidence(req: EvidenceBatchRequest):
     worklist = wl.build_worklist(req.model_id)
     observations = await orchestrator.dispatch_evidence(ctx, req.evidences, worklist)
     return {"worklist": worklist["counts"], "observations": observations, "agentLog": ctx.log}
+
+
+class CompareMergedRequest(BaseModel):
+    sessionId: str
+    model_id: str = "CVS6000_VALVE"
+    evidences: list[dict]
+
+
+@app.post("/compare-merged")
+async def compare_merged(req: CompareMergedRequest):
+    """Merged-scan CAD comparison: all chunks of the session as one cloud,
+    registered against the CAD reference by the pointcloud-agent."""
+    ctx = contexts.setdefault(req.sessionId, InspectionContext(session_id=req.sessionId))
+    if os.environ.get("AGENT_TRANSPORT") == "http":
+        import urllib.request as ur
+        payload = json.dumps({"evidences": req.evidences, "sessionId": req.sessionId}).encode()
+        request = ur.Request(os.environ.get("POINTCLOUD_AGENT_URL", "http://127.0.0.1:8103") + "/compare-merged",
+                             data=payload, headers={"Content-Type": "application/json"})
+        with ur.urlopen(request, timeout=600) as resp:
+            result = json.loads(resp.read())
+        for entry in result.get("log", []):
+            ctx.log.append(entry)
+        return {"observation": result["observation"], "agentLog": ctx.log}
+    agent = next(a for a in orchestrator.agents if a.name == "pointcloud-agent")
+    local = getattr(agent, "_local", agent)
+    obs = await local.compare_merged(ctx, req.evidences)
+    return {"observation": obs, "agentLog": ctx.log}
 
 
 @app.get("/sessions/{session_id}/log")

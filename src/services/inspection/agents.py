@@ -86,17 +86,48 @@ class ImageAgent(SubAgent):
         return obs
 
 
+
+def resolve_evidence_file(evidence: dict) -> str:
+    """Local path for an evidence file: direct path when present, else
+    download evidence['url'] (API file endpoint) to a temp file. The agent
+    services do not share the API's data volume, so URLs are the contract."""
+    path = evidence.get("path") or ""
+    if path and os.path.exists(path):
+        return path
+    url = evidence.get("url") or ""
+    if not url:
+        return path
+    import tempfile
+    suffix = os.path.splitext(evidence.get("filename") or url.split("/")[-1] or ".ply")[1] or ".ply"
+    fd, tmp = tempfile.mkstemp(prefix="evidence-", suffix=suffix)
+    with os.fdopen(fd, "wb") as fh, urllib.request.urlopen(url, timeout=120) as resp:
+        fh.write(resp.read())
+    return tmp
+
+
 class PointCloudAgent(SubAgent):
     name = "pointcloud-agent"
     media_types = {"pointcloud"}
 
     async def run(self, ctx, evidence, rule):
         ctx.record(self.name, "started", evidence.get("eventId", ""))
-        reg = await asyncio.to_thread(geometry.register, evidence.get("path", ""))
+        reg = await asyncio.to_thread(geometry.register, resolve_evidence_file(evidence))
         obs = {"kind": "geometry", "ruleId": rule.get("ruleId"), "lookFor": {"features": rule.get("features", []), "thresholdMm": rule.get("thresholdMm")}, "registration": reg,
                "measurement": {"valueMm": reg.get("meanDeviationMm")} if reg.get("meanDeviationMm") is not None else None,
                "tool": "open3d"}
         ctx.record(self.name, "completed", f"rmse={reg.get('rmseMm')} coverage={reg.get('surfaceCoverageFraction')}")
+        return obs
+
+    async def compare_merged(self, ctx, evidences):
+        """Merge every point-cloud chunk of the session into one scan and
+        register it against the CAD reference (coverage needs the whole)."""
+        ctx.record(self.name, "started", f"merged comparison of {len(evidences)} chunks")
+        paths = [resolve_evidence_file(ev) for ev in evidences]
+        reg = await asyncio.to_thread(geometry.register_merged, paths)
+        obs = {"kind": "geometry", "registration": reg,
+               "measurement": {"valueMm": reg.get("meanDeviationMm")} if reg.get("meanDeviationMm") is not None else None,
+               "tool": "open3d", "mergedChunks": reg.get("mergedChunks", 0)}
+        ctx.record(self.name, "completed", f"rmse={reg.get('rmseMm')} coverage={reg.get('surfaceCoverageFraction')} chunks={reg.get('mergedChunks')}")
         return obs
 
 

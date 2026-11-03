@@ -1,4 +1,9 @@
 import { useEffect, useState } from 'react';
+import { lazy, Suspense } from 'react';
+import type { Viewer } from './ViewerDialog';
+const ViewerDialog = lazy(() => import('./ViewerDialog'));
+const PointCloudThumb = lazy(() => import('./PointCloudThumb'));
+const ExpandIcon = () => (<svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-6 6M4 20l6-6" /></svg>);
 
 const api = (p: string, o?: any) => fetch(p, o).then(r => r.json());
 const SEARCH_ICON = 'M10.5 3a7.5 7.5 0 1 0 4.6 13.5l5 5 1.4-1.4-5-5A7.5 7.5 0 0 0 10.5 3Zm0 2a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11Z';
@@ -34,11 +39,13 @@ export default function App() {
   const [docQ, setDocQ] = useState('');
   const [docFilter, setDocFilter] = useState('All');
   const [openApp, setOpenApp] = useState('');
+  const [viewer, setViewer] = useState<Viewer | null>(null);
+  const [openRead, setOpenRead] = useState<Record<string, boolean>>({});
 
   const loadHome = () => api('/api/v1/inspections').then(j => setInspections(j.inspections || []));
   useEffect(() => { loadHome(); api('/api/v1/cad-models').then(j => setCadModels(j.cad_models || [])); api('/api/v1/instruction-sets').then(setRules); api('/api/v1/reports').then(j => setReports(j.reports || []));
-    const m = location.hash.match(/^#session\/([^/]+)(?:\/(rules|documents|dossier))?$/);
-    if (m) api(`/api/v1/inspections/${m[1]}`).then(i => { if (i?.id) { setCurrent(i); setPageState('session'); if (m[2]) setTab(m[2] === 'rules' ? 'Applicable Rules' : m[2] === 'documents' ? 'Documents' : 'Dossier'); } });
+    const m = location.hash.match(/^#session\/([^/]+)(?:\/(rules|documents|dossier|photo|video|pointcloud|cad))?$/);
+    if (m) api(`/api/v1/inspections/${m[1]}`).then(i => { if (i?.id) { setCurrent(i); setPageState('session'); if (m[2] === 'rules') setTab('Applicable Rules'); else if (m[2] === 'documents') setTab('Documents'); else if (m[2] === 'dossier') setTab('Dossier'); else if (m[2] === 'photo') setViewer({ kind: 'photo', index: 0 }); else if (m[2] === 'video') setViewer({ kind: 'video' }); else if (m[2] === 'pointcloud') setViewer({ kind: 'pointcloud' }); else if (m[2] === 'cad') setViewer({ kind: 'cad' }); } });
   }, []);
   useEffect(() => { if (page === 'session' && current) { const t = setInterval(async () => { const i = await api(`/api/v1/inspections/${current.id}`); setCurrent(i); setEvidence(await api(`/api/v1/inspections/${current.id}/evidence`)); setSessionRules(await api(`/api/v1/inspections/${current.id}/rules`)); setDocuments(await api(`/api/v1/inspections/${current.id}/documents`)); }, 1500); return () => clearInterval(t); } }, [page, current?.id]);
 
@@ -74,6 +81,11 @@ export default function App() {
     { label: 'analysis', items: evidence, c: '#A594FF', state: current.lifecycleStatus === 'WAITING' ? 'Idle' : closed ? 'Done' : `${Math.max(0, totalRules - evaluated)} to run` }
   ] : [];
   const liveRules = (sessionRules?.rules || []).filter((r: any) => !['NOT_INSPECTED', 'NOT_APPLICABLE'].includes(r.status));
+  const geo: any = current?.geometry || null;
+  const geoText = !geo ? '' : geo.status === 'running' ? 'Comparing with CAD\u2026'
+    : geo.status === 'valid' ? `Comparison succeeded${geo.coverage !== undefined ? ` \u00B7 Coverage ${Math.round(geo.coverage * 100)}%` : ''}`
+    : geo.status === 'insufficient' ? `Comparison did not validate \u00B7 ${geo.reason || 'registration not validated'}`
+    : `Comparison unavailable \u00B7 ${geo.reason || 'inspection service unreachable'}`;
   const cadFile = (cadModels.find((m: any) => m.model_id === current?.model_id)?.cad_file || '').split('/').pop() || current?.model_id || '';
   const fmtSize = (n: number) => !n ? '0 KB' : n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
   const statusLabel = (s: string) => ({ NOT_INSPECTED: 'Pending', ANALYZING: 'Analyzing', INSUFFICIENT_EVIDENCE: 'Insufficient Evidence', NOT_APPLICABLE: 'Not Applicable' } as any)[s] || titleCase(s);
@@ -293,6 +305,16 @@ export default function App() {
           </article>
         </main></div>; })()
         : <div className={`ar-live${closed ? ' closed' : ''}`}>
+          {closed && <section aria-label="Inspection statistics" style={{ flex: '1 1 100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))', gap: 10 }}>
+            {[
+              { n: evaluated, k: 'Total findings', c: 'var(--text)' },
+              { n: findingCounts.pass, k: 'Pass', c: 'var(--pass)' },
+              { n: (sessionRules?.rules || []).filter((r: any) => r.status === 'INSUFFICIENT_EVIDENCE').length, k: 'Evidence needed', c: 'var(--info)' },
+              { n: findingCounts.fail, k: 'Critical', c: 'var(--fail)' },
+              { n: geo?.coverage !== undefined ? `${Math.round(geo.coverage * 100)}%` : '\u2014', k: 'Laser point cloud coverage', c: 'var(--info)' },
+              { n: evidence.length, k: 'Evidence files', c: 'var(--text)' }
+            ].map((x: any) => <div key={x.k} className="ar-card" style={{ padding: '14px 16px' }}><div style={{ fontSize: 26, lineHeight: 1.1, fontWeight: 700, color: x.c }}>{x.n}</div><div className="ar-small">{x.k}</div>{x.k === 'Laser point cloud coverage' && geo && <div className="ar-micro">{geo.status === 'valid' ? 'CAD comparison succeeded' : geo.status}</div>}</div>)}
+          </section>}
           <div className="ar-evidence" aria-label="Evidence">
             <div className="ar-bar" style={{ flex: 'none', justifyContent: 'space-between', gap: 8, minHeight: 30 }}>
               <h2 className="ar-h3">Evidence <span className="ar-micro" style={{ marginLeft: 4 }}>{evidence.length} {evidence.length === 1 ? 'file' : 'files'}</span></h2>
@@ -300,23 +322,25 @@ export default function App() {
             <div className="ar-evgrid">
               <section className="ar-media" aria-label="Video">
                 <span className="ar-media-tag">Video</span><span className="ar-media-meta">{videos.length ? `${videos[videos.length - 1].sourceId}` : 'camera-01 idle'}</span>
+                <button type="button" className="ar-btn secondary sm icon-only" aria-label="Open viewer" style={{ position: 'absolute', right: 10, bottom: 10, zIndex: 3 }} onClick={() => setViewer({ kind: 'video' })}><ExpandIcon /></button>
                 {videos.length ? <video key={videos[videos.length - 1].evidenceId} src={`/api/v1/inspections/${current.id}/evidence/${videos[videos.length - 1].evidenceId}/file`} controls muted playsInline style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : <div className="ar-media-empty">{closed ? 'No video received' : 'Awaiting camera'}</div>}
               </section>
               <section className="ar-media" aria-label="3D point cloud" style={{ background: '#07080C' }}>
                 <span className="ar-media-tag">Point cloud</span><span className="ar-media-meta">{pcs.length ? `${pcs.length} chunks` : 'laser-01 idle'}</span>
-                {pcs.length ? <div style={{ position: 'absolute', inset: '44px 12px 12px', overflow: 'hidden', textAlign: 'center' }}><p className="ar-h3">{pcs.length} point-cloud chunks received</p><p className="ar-small">Chunk count is not surface coverage. Registration quality appears with findings.</p>{pcs.slice(-4).map((e: any) => <p key={e.evidenceId} className="ar-mono ar-micro">{e.filename}</p>)}</div> : <div className="ar-media-empty">{closed ? 'No scan received' : 'Awaiting laser scan'}</div>}
+                <button type="button" className="ar-btn secondary sm icon-only" aria-label="Open 3D viewer" style={{ position: 'absolute', right: 10, bottom: 10, zIndex: 3 }} onClick={() => setViewer({ kind: 'pointcloud' })}><ExpandIcon /></button>
+                {pcs.length ? <><div style={{ position: 'absolute', inset: '44px 12px 12px', overflow: 'hidden', textAlign: 'center' }}><p className="ar-h3">{pcs.length} point-cloud chunks received</p><p className="ar-small">Chunk count is not surface coverage. Registration quality appears with findings.</p></div><Suspense fallback={null}><PointCloudThumb label="Latest laser scan" urls={pcs.map((e: any) => `/api/v1/inspections/${current.id}/evidence/${e.evidenceId}/file`)} /></Suspense><span className="ar-micro" style={{ position: 'absolute', left: 10, bottom: 10, zIndex: 3, background: '#0A0B10D9', padding: '2px 8px', borderRadius: 6 }}>Latest: {pcs[pcs.length - 1].filename} · {pcs.length} chunks merged</span>{geo && <span className="ar-micro" style={{ position: 'absolute', left: 10, bottom: 38, zIndex: 3, background: '#0A0B10D9', padding: '2px 8px', borderRadius: 6, color: geo.status === 'valid' ? 'var(--pass)' : geo.status === 'running' ? 'var(--accent)' : 'var(--warn)' }}>CAD comparison: {geoText}</span>}</> : <div className="ar-media-empty">{closed ? 'No scan received' : 'Awaiting laser scan'}</div>}
               </section>
               <section className="ar-media" aria-label="Photographs">
                 <span className="ar-media-tag">Photographs</span><span className="ar-media-meta">{photos.length} of 6</span>
                 <div className="ar-photos">
                   {PHOTO_SLOTS.map((label, i) => photos[i]
-                    ? <span key={label} className="ar-photo"><img src={`/api/v1/inspections/${current.id}/evidence/${photos[i].evidenceId}/file`} alt={label} /></span>
+                    ? <button key={label} type="button" className="ar-photo" aria-label={`${label} photograph`} onClick={() => setViewer({ kind: 'photo', index: i })}><img src={`/api/v1/inspections/${current.id}/evidence/${photos[i].evidenceId}/file`} alt={label} /></button>
                     : <div key={label} className="ar-photo empty">{label}</div>)}
                 </div>
               </section>
               <section className="ar-media" aria-label="CAD reference" style={{ background: '#07080C' }}>
                 <span className="ar-media-tag">CAD reference</span><span className="ar-media-meta">{cadFile}</span>
-                <div className="ar-stagebox"><div className="ar-4x3"><img src="/assets/27eb1fb0b3044c82e23e2ffd10ff5ad6.svg" alt="Wireframe reference model of the valve" /></div></div>
+                <div className="ar-stagebox"><div className="ar-4x3"><img src="/assets/27eb1fb0b3044c82e23e2ffd10ff5ad6.svg" alt="Wireframe reference model of the valve" /></div></div><Suspense fallback={null}><PointCloudThumb label="CAD reference point cloud" color="#9db4d0" urls={[`/api/v1/cad-models/${current.model_id}/reference.ply?sample=80000`]} /></Suspense><button type="button" className="ar-btn secondary sm icon-only" aria-label="Open CAD viewer" style={{ position: 'absolute', right: 10, bottom: 10, zIndex: 3 }} onClick={() => setViewer({ kind: 'cad' })}><ExpandIcon /></button>
               </section>
             </div>
             <section className="ar-card" aria-label="Timeline and source state" style={{ flex: 'none', padding: '12px 16px' }}>
@@ -346,6 +370,17 @@ export default function App() {
               {current.lifecycleStatus !== 'WAITING' && current.lifecycleStatus !== 'RECEIVING' && <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                 <div className="ar-meter"><i style={{ width: `${totalRules ? Math.round((evaluated / totalRules) * 100) : 0}%` }}></i></div>
                 <span className="ar-micro">{evaluated} of {totalRules} applicable rules evaluated</span>
+              </div>}
+              {!!pcs.length && <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <div className="ar-bar" style={{ justifyContent: 'space-between' }}>
+                  <span className="ar-label">CAD comparison</span>
+                  {geo?.status !== 'running' && !closed && <button type="button" className="ar-btn ghost sm" onClick={async () => { await api(`/api/v1/inspections/${current.id}/compare`, { method: 'POST' }); setCurrent({ ...current, geometry: { status: 'running' } }); }}>{geo ? 'Re-run' : 'Compare with CAD'}</button>}
+                </div>
+                {geo ? <>
+                  <span><span className={geo.status === 'valid' ? 'ar-badge pass' : geo.status === 'running' ? 'ar-badge accent' : 'ar-badge warn'}>{geo.status === 'running' ? 'Running' : titleCase(geo.status)}</span></span>
+                  <span className="ar-micro">{geoText}</span>
+                  {geo.scanPoints && <span className="ar-micro">{geo.scanPoints.toLocaleString()} scan points · {geo.chunks} chunks · merged scan</span>}
+                </> : <span className="ar-micro">Not run yet. Runs automatically when the feed completes.</span>}
               </div>}
               {current.lifecycleStatus === 'WAITING' && <button type="button" className="ar-btn secondary sm" onClick={() => window.open(`http://${location.hostname}:4173`, '_blank')}>Prototype: run simulated feed</button>}
               {closed && <div className="ar-bar" style={{ justifyContent: 'space-between' }}>
@@ -390,15 +425,31 @@ export default function App() {
                 <span className="ar-small" style={{ color: findingCounts.fail ? 'var(--fail)' : 'var(--text-3)', fontWeight: 600 }}>{findingCounts.fail} Fail</span>
               </div>
             </div>
-            {(sessionRules?.rules || []).map((r: any) => <article key={r.ruleId} className="ar-read">
-              <div className="ar-read-head" style={{ cursor: 'default' }}>
+            {[...(sessionRules?.rules || [])].sort((a: any, b: any) => ({ FAIL: 0, WARNING: 1, INSUFFICIENT_EVIDENCE: 2, PASS: 3, NOT_INSPECTED: 4, NOT_APPLICABLE: 5, ANALYZING: 2 } as any)[a.status] - ({ FAIL: 0, WARNING: 1, INSUFFICIENT_EVIDENCE: 2, PASS: 3, NOT_INSPECTED: 4, NOT_APPLICABLE: 5, ANALYZING: 2 } as any)[b.status]).map((r: any) => {
+              const isOpen = openRead[r.ruleId] !== undefined ? openRead[r.ruleId] : ['FAIL', 'WARNING', 'INSUFFICIENT_EVIDENCE'].includes(r.status);
+              const evs = (r.finding?.evidenceIds || []).map((id: string) => evidence.find((e: any) => e.evidenceId === id)).filter(Boolean);
+              const evPhoto = evs.find((e: any) => e.mediaType === 'photo');
+              const evPc = evs.find((e: any) => e.mediaType === 'pointcloud');
+              const rel = r.finding?.at ? (() => { const s = Math.max(0, Math.round((new Date(r.finding.at).getTime() - new Date(current.createdAt).getTime()) / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; })() : '';
+              return <article key={r.ruleId} className="ar-read">
+              <button type="button" className="ar-read-head" aria-expanded={isOpen} onClick={() => setOpenRead({ ...openRead, [r.ruleId]: !isOpen })}>
                 <span><span className={badgeFor(r.status)}>{titleCase(r.status)}</span></span>
                 <span style={{ minWidth: 0 }}><span className="ar-read-title">{r.title}</span><span className="ar-read-cap">{r.finding?.reason || 'Not evaluated.'}</span></span>
                 <span className="ar-mono ar-micro" style={{ paddingTop: 3 }}>Rule {r.section}</span>
-                <span className="ar-mono ar-micro" style={{ paddingTop: 3 }}></span>
-                <span></span>
-              </div>
-            </article>)}
+                <span className="ar-mono ar-micro" style={{ paddingTop: 3 }}>{rel}</span>
+                <svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true" style={{ color: '#8D93A8', marginTop: 3 }}><path d={isOpen ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg>
+              </button>
+              {isOpen && <div className="ar-read-body">
+                {evPhoto && <div className="ar-read-img"><img src={`/api/v1/inspections/${current.id}/evidence/${evPhoto.evidenceId}/file`} alt={evPhoto.filename} style={{ display: 'block', width: '100%', borderRadius: 8 }} /></div>}
+                {!evPhoto && evPc && <div className="ar-read-img" style={{ position: 'relative', height: 150 }}><Suspense fallback={null}><PointCloudThumb label={`Scan for ${r.title}`} urls={[`/api/v1/inspections/${current.id}/evidence/${evPc.evidenceId}/file`]} /></Suspense></div>}
+                <div className="ar-read-text" style={{ flex: '1 1 320px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div className="ar-quote" style={{ fontSize: 14 }}>{r.quote}<small>Rule {r.section} · {r.source}</small></div>
+                  <div>{r.finding?.reason || 'Not evaluated.'}</div>
+                  <div className="ar-mono ar-micro">{evs.length ? evs.map((e: any) => e.filename).join(' · ') : 'No evidence evaluated'}</div>
+                  <button type="button" className="ar-link" style={{ alignSelf: 'flex-start' }} onClick={() => setPage('rules')}>View rule {r.section}<svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></button>
+                </div>
+              </div>}
+            </article>; })}
           </section>}
         </div>}
       </>
@@ -483,6 +534,7 @@ export default function App() {
         </section></>}
 
       </main></div>)}
+      {viewer && current && <Suspense fallback={null}><ViewerDialog viewer={viewer} sessionId={current.id} photos={photos} videos={videos} pcs={pcs} cadUrl={`/api/v1/cad-models/${current.model_id}/reference.ply?sample=200000`} onClose={() => setViewer(null)} onPhoto={(index) => setViewer({ kind: 'photo', index })} /></Suspense>}
     </div>
   );
 }

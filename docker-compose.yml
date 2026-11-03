@@ -29,6 +29,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       META_API_KEY: ${META_API_KEY:-}
       META_ADAPTER_LIVE: ${META_ADAPTER_LIVE:-}
+      AGENT_HOST: "0.0.0.0"
     ports: ["8101:8101"]
 
   image-agent:
@@ -73,6 +74,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SERVICE_NAME: argus-api
       INSPECTION_SERVICE_URL: http://orchestrator:8100
+      EVIDENCE_BASE_URL: http://api:8000
       ARGUS_INGEST_TOKEN: ${ARGUS_INGEST_TOKEN:-}
       META_API_KEY: ${META_API_KEY:-}
     volumes:

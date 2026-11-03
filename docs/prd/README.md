@@ -12,5 +12,6 @@ One feature at a time. **Review a PRD, edit it here if needed, then say `go PRD-
 | 06 | [Applicable Rules & Documents](PRD-06-applicable-rules-and-documents.md) | 02, 03, 05 | Awaiting review |
 | 07 | [Inspection coordinator (AI/geometry)](PRD-07-inspection-coordinator.md) | 04, 06 | Awaiting review |
 | 08 | [Closure, dossier & Reports](PRD-08-closure-dossier-and-reports.md) | 05, 06, 07 | Awaiting review |
+| 09 | [Evidence viewer dialog](PRD-09-evidence-viewer-dialog.md) | 04, 05 | Approved (user request 2026-11-03) |
 
 Each PRD has: **Specs** (functional, from `Argus_Spec.md` v0.9) and a separate **Technical Specs** section (design patterns, retry, configuration, data/API contracts). Sources: [spec](../specs/Argus_Spec.md) · [tech stack](../architecture/Argus_Tech_Stack.md) · [agentic architecture](../architecture/Argus_Agentic_Architecture.md) · [UX mockup](../ux/Argus%20click-through-html/Main.dc.html).

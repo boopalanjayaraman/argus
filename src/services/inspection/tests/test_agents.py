@@ -80,3 +80,18 @@ def test_agent_failure_isolated():
         out = await orch.dispatch_one(ctx, {"mediaType": "pointcloud", "eventId": "p1", "path": "/nonexistent/x.ply"}, RULE)
         assert out["kind"] == "geometry"  # register() returns insufficient, does not raise
     run(main())
+
+
+def test_resolve_evidence_file_downloads_from_url(tmp_path):
+    import agents
+    src = tmp_path / "chunk.ply"
+    src.write_bytes(b"ply-bytes")
+    out = agents.resolve_evidence_file({"url": src.as_uri(), "filename": "chunk.ply"})
+    assert open(out, "rb").read() == b"ply-bytes"
+
+
+def test_resolve_evidence_file_prefers_existing_path(tmp_path):
+    import agents
+    src = tmp_path / "chunk.ply"
+    src.write_bytes(b"x")
+    assert agents.resolve_evidence_file({"path": str(src), "url": "http://invalid"}) == str(src)

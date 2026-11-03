@@ -321,3 +321,41 @@ in Atlas (inspections: 1).
 - "Open Dossier" previously linked to the raw server dossier JSON/HTML; it now switches to the in-page Dossier tab, and Download dossier saves the generated file. Reports View does the same.
 - /documents now includes pinned CAD baseline + rule snapshot, evidenceId, sha256 and relative received time; tabs are deep-linkable (#session/<id>/rules|documents|dossier).
 - Real-data differences vs mockup: funnel counts are the real pinned pack (5/4/4, not 156/114/7); findings remain Insufficient until Meta live smoke passes.
+
+## PRD-09 evidence viewer dialog (2026-11-03)
+- ViewerDialog (lazy-loaded three.js): photo (full-res, prev/next, arrows/Esc), video (native controls), point cloud (merged chunks, OrbitControls orbit/zoom/pan, Reset view, chunks+points header). Deep links #session/<id>/photo|video|pointcloud.
+- Root-cause find: Simulator PLY chunking hardcoded stride 16 vs declared 17 bytes/vertex, misaligning every chunk after the first and poisoning geometry. Fixed in Simulator (plyStride from header, stale-cache regeneration, test added); Argus parser also clamps over-declared vertex counts and drops non-finite/outlier points.
+- Verified: fresh 39/39 stream renders 250,613 points in scan colors; web vitest 7/7, simulator 4/4.
+
+## Pane thumbnails (2026-11-03)
+- Point cloud pane now renders the accumulated scan (all chunks merged, latest chunk captioned) instead of a text list; CAD pane renders Argus's generated CAD reference cloud (new sampled endpoint GET /api/v1/cad-models/:model_id/reference.ply?sample=) instead of only the wireframe SVG (kept as fallback).
+- Both thumbnails are static fitted renders (no motion); clicking expand still opens the interactive PRD-09 viewer.
+
+## CAD vs scan comparison status (2026-11-03)
+- Was not shown because it never ran live: API had INSPECTION_SERVICE_URL but never called the orchestrator; agent services also bound 127.0.0.1 so orchestrator->agent HTTP never worked in Docker (fixed: AGENT_HOST=0.0.0.0 in compose).
+- Now: /complete triggers runComparison (async) -> orchestrator /analyze-evidence -> pointcloud-agent downloads chunks via evidence URLs (new resolve_evidence_file) -> Open3D ICP vs Argus CAD reference. Best-fitness registration stored on the inspection; POST /:id/compare re-runs.
+- UI: scan pane meta shows coverage% like the mockup, CAD comparison line in the pane, and a CAD comparison block (status/RMSE/coverage/mean deviation, Re-run) in the rail. Real result on Viewer Check: Valid, RMSE 4.053mm, fitness 1.0, coverage 8% (best single chunk), mean deviation 3.701mm.
+- Findings still gate at coordinator level (coverage >= 0.3, RMSE <= 2mm), so rule verdicts remain Insufficient until a merged-scan registration passes; comparison status is reported, not converted into a verdict.
+
+## Merged-scan coverage (2026-11-03)
+- Comparison now merges all chunks before registration: geometry.register_merged + PointCloudAgent.compare_merged + POST /compare-merged (agent-service and orchestrator) ; API runComparison switched to it.
+- Result on Viewer Check: coverage 8% (best single chunk) -> 58.01% (merged, 534,688 scan points), RMSE 4.22mm, mean deviation 3.864mm, status Valid.
+- Findings gate unchanged (needs RMSE <= 2mm at rule level): verdicts still Insufficient on this coarse synthetic scan; comparison metrics are reported, not converted.
+
+## Deviation metric correction (2026-11-03)
+- RMSE was unsigned nearest-point distance to the CAD *point cloud*, which mostly measures CAD reference point spacing (~3.5mm), not surface deviation. Signed point-to-plane diagnostic: median -0.36mm; point-to-mesh ground truth RMSE 1.899mm.
+- geometry.py now computes point-to-plane deviation (signed along CAD normals; RMSE over signed values, meanDeviation = mean |signed|). Live result: RMSE 4.22 -> 2.005mm, mean deviation 3.864 -> 1.519mm, coverage unchanged 58%.
+- Earlier claim that the scan came from a different CAD was wrong: same CAD; the offset was our metric.
+
+## Coverage computation correction (2026-11-03)
+- Reported 58% was also a computation artifact: coverage marked a CAD point covered only when it was some scan point's nearest neighbor (reverse direction, undercounts under clustering/downsampling).
+- Direct CAD->scan distance gives 94.6-94.8%. geometry.py now computes coverage as CAD points within MAX_CORR of the aligned scan. Live: coverage 0.9459, RMSE 2.005mm, mean deviation 1.519mm, status Valid.
+- The scan in fact covers nearly the whole valve; earlier "unscanned underside" explanation was wrong.
+
+## Closed-inspection statistics tiles (2026-11-03)
+- Completed/Terminated sessions open with a statistics tile row: Total findings, Pass, Warnings, Critical, Laser point cloud coverage (with "CAD comparison succeeded" sub-line), Evidence files.
+- Coverage percentage is back on screen (user reversed the earlier hide): rail comparison line also shows "Comparison succeeded · Coverage 95%". Stored geometry: coverage 0.9459.
+
+## Merged video in viewer (2026-11-03)
+- New GET /api/v1/inspections/:id/video/merged: ffmpeg concat (stream copy, re-encode fallback) of segments in sequence order, cached by chunk signature, HTTP Range (206) for seeking. ffmpeg added to Dockerfile.api runtime.
+- Viewer plays the merged file (33.5s for 17 segments) with a "N segments merged" header; falls back to the last segment on error. Session pane preview unchanged.
