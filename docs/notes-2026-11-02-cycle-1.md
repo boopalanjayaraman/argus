@@ -315,3 +315,9 @@ in Atlas (inspections: 1).
 - Fix: session page now reuses the mockup DOM/class names verbatim (ar-media-tag/meta, ar-photo.empty slots, ar-steps, ar-lane ticks, ar-feedhead/ar-feed, ar-reader), with real data bound in. Same bundle.css (byte-identical to docs copy).
 - Verified waiting / receiving / completed by headless-Chrome screenshots against mockup images.
 - Remaining real-data differences: CAD meta shows the real cvs6000_valve.stl; point-cloud pane lists chunks (no rendered registration image yet); findings stay Insufficient until Meta live smoke passes.
+
+## Inspection tabs: verbatim mockup port (2026-11-03)
+- Applicable Rules, Documents and Dossier tabs were invented layouts; replaced with verbatim Main.dc.html ports (ar-funnel, ar-rule.with-result, Why-these-rules aside; doc chips/search/ar-rows table; in-page ar-paper dossier).
+- "Open Dossier" previously linked to the raw server dossier JSON/HTML; it now switches to the in-page Dossier tab, and Download dossier saves the generated file. Reports View does the same.
+- /documents now includes pinned CAD baseline + rule snapshot, evidenceId, sha256 and relative received time; tabs are deep-linkable (#session/<id>/rules|documents|dossier).
+- Real-data differences vs mockup: funnel counts are the real pinned pack (5/4/4, not 156/114/7); findings remain Insufficient until Meta live smoke passes.

@@ -31,11 +31,14 @@ export default function App() {
   const [ruleSection, setRuleSection] = useState('');
   const [ruleEv, setRuleEv] = useState('');
   const [openRule, setOpenRule] = useState('');
+  const [docQ, setDocQ] = useState('');
+  const [docFilter, setDocFilter] = useState('All');
+  const [openApp, setOpenApp] = useState('');
 
   const loadHome = () => api('/api/v1/inspections').then(j => setInspections(j.inspections || []));
   useEffect(() => { loadHome(); api('/api/v1/cad-models').then(j => setCadModels(j.cad_models || [])); api('/api/v1/instruction-sets').then(setRules); api('/api/v1/reports').then(j => setReports(j.reports || []));
-    const m = location.hash.match(/^#session\/(.+)$/);
-    if (m) api(`/api/v1/inspections/${m[1]}`).then(i => { if (i?.id) { setCurrent(i); setPageState('session'); } });
+    const m = location.hash.match(/^#session\/([^/]+)(?:\/(rules|documents|dossier))?$/);
+    if (m) api(`/api/v1/inspections/${m[1]}`).then(i => { if (i?.id) { setCurrent(i); setPageState('session'); if (m[2]) setTab(m[2] === 'rules' ? 'Applicable Rules' : m[2] === 'documents' ? 'Documents' : 'Dossier'); } });
   }, []);
   useEffect(() => { if (page === 'session' && current) { const t = setInterval(async () => { const i = await api(`/api/v1/inspections/${current.id}`); setCurrent(i); setEvidence(await api(`/api/v1/inspections/${current.id}/evidence`)); setSessionRules(await api(`/api/v1/inspections/${current.id}/rules`)); setDocuments(await api(`/api/v1/inspections/${current.id}/documents`)); }, 1500); return () => clearInterval(t); } }, [page, current?.id]);
 
@@ -72,6 +75,17 @@ export default function App() {
   ] : [];
   const liveRules = (sessionRules?.rules || []).filter((r: any) => !['NOT_INSPECTED', 'NOT_APPLICABLE'].includes(r.status));
   const cadFile = (cadModels.find((m: any) => m.model_id === current?.model_id)?.cad_file || '').split('/').pop() || current?.model_id || '';
+  const fmtSize = (n: number) => !n ? '0 KB' : n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+  const statusLabel = (s: string) => ({ NOT_INSPECTED: 'Pending', ANALYZING: 'Analyzing', INSUFFICIENT_EVIDENCE: 'Insufficient Evidence', NOT_APPLICABLE: 'Not Applicable' } as any)[s] || titleCase(s);
+  const evLabel = (r: any) => [...new Set((r.modalities || []).map((m: string) => m === 'pointcloud' ? '3D scan' : 'Photo or video'))].join(' \u00B7 ');
+  const docKind = (d: any) => d.kind || ({ video: 'Video', photo: 'Photograph', pointcloud: 'Point cloud' } as any)[d.type] || d.type;
+  const docCat = (d: any) => d.type === 'Report' ? 'Reports' : (d.type === 'cad' || d.type === 'rules') ? 'Specifications' : d.type === 'video' ? 'Video' : d.type === 'photo' ? 'Photographs' : 'Point clouds';
+  const allDocs: any[] = [...(documents?.documents || [])].sort((a: any, b: any) => ((a.type === 'Report' ? 0 : (a.type === 'cad' || a.type === 'rules') ? 1 : 2) - (b.type === 'Report' ? 0 : (b.type === 'cad' || b.type === 'rules') ? 1 : 2)));
+  const docRows = allDocs.filter((d: any) => (docFilter === 'All' || docCat(d) === docFilter) && (!docQ || d.name.toLowerCase().includes(docQ.toLowerCase())));
+  const leftOut = (sessionRules?.rules || []).filter((r: any) => r.status === 'NOT_APPLICABLE');
+  const appRules = (sessionRules?.rules || []).filter((r: any) => r.status !== 'NOT_APPLICABLE');
+  const ruleSections = [...new Set<string>(appRules.map((r: any) => r.category || 'Rules'))].map((name) => ({ name, rows: appRules.filter((r: any) => (r.category || 'Rules') === name) }));
+  const downloadDossier = async () => { const j = await api(`/api/v1/inspections/${current.id}/dossier`); const blob = new Blob([j.html || ''], { type: 'text/html' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${current.id}_dossier.html`; a.click(); URL.revokeObjectURL(a.href); };
   const badgeFor = (s: string) => s === 'PASS' ? 'ar-badge pass' : s === 'FAIL' ? 'ar-badge fail' : s === 'WARNING' ? 'ar-badge warn' : 'ar-badge info';
 
 
@@ -159,9 +173,125 @@ export default function App() {
           </div>
         </div>
 
-        {tab === 'Applicable Rules' ? <div className="ar-scroll"><main className="ar-page"><section className="ar-card pad"><p className="ar-small">Library {sessionRules?.cascade?.library} → valve type {sessionRules?.cascade?.valveType} → customer spec {sessionRules?.cascade?.customerSpec}</p><p>{sessionRules?.why}</p>{(sessionRules?.rules || []).map((r: any) => <div key={r.ruleId} className="ar-row static"><span>{r.section} {r.title}</span><span className={badgeFor(r.status)}>{titleCase(r.status)}</span><span className="ar-small">“{r.quote}”</span></div>)}</section></main></div>
-        : tab === 'Documents' ? <div className="ar-scroll"><main className="ar-page"><section className="ar-card pad">{(documents?.documents || []).length ? (documents.documents).map((d: any, i: number) => <p key={i} className="ar-mono">{d.name} · {d.type} · {d.size} bytes · {d.source}</p>) : <div className="ar-empty"><strong>No documents to display</strong><span>Evidence and reports for this inspection will appear here as they arrive.</span></div>}</section></main></div>
-        : tab === 'Dossier' ? <div className="ar-scroll"><main className="ar-page"><section className="ar-card pad"><p>Dossier ready.</p><a className="ar-btn primary" href={`/api/v1/inspections/${current.id}/dossier`} target="_blank" rel="noreferrer">Open Dossier</a></section></main></div>
+        {tab === 'Applicable Rules' ? <div className="ar-scroll"><main className="ar-page" style={{ paddingTop: 20, gap: 20 }}>
+          <section className="ar-funnel" aria-label="How rules were selected">
+            {[{ n: sessionRules?.cascade?.library ?? '—', k: 'Rule library', sub: 'All inspection rules', final: 'false' }, { n: sessionRules?.cascade?.valveType ?? '—', k: 'Match valve type', sub: cadModels.find((m: any) => m.model_id === current.model_id)?.display_name || current.model_id, final: 'false' }, { n: totalRules, k: 'Baseline for this valve', sub: 'No specification uploaded', final: 'true' }].map((f: any) => <div key={f.k} className="ar-funnel-step" data-final={f.final}><span className="ar-funnel-n">{f.n}</span><span style={{ minWidth: 0 }}><span className="ar-h3" style={{ display: 'block' }}>{f.k}</span><span className="ar-micro" style={{ overflowWrap: 'anywhere' }}>{f.sub}</span></span></div>)}
+          </section>
+          <div className="ar-split" style={{ gap: 20 }}>
+            <section className="ar-grow" aria-label="Applicable rules" style={{ flexBasis: 640 }}>
+              {ruleSections.map((sec: any) => <div key={sec.name} className="ar-rsec">
+                <div className="ar-rsec-head" style={{ position: 'static', paddingTop: 14 }}><h2 className="ar-h3" style={{ fontSize: 15 }}>{sec.name}</h2><span className="ar-micro">{sec.rows.length} {sec.rows.length === 1 ? 'rule' : 'rules'}</span></div>
+                {sec.rows.map((r: any) => <article key={r.ruleId} className="ar-rule" data-open={openApp === r.ruleId}>
+                  <button type="button" className="ar-rule-head with-result" aria-expanded={openApp === r.ruleId} onClick={() => setOpenApp(openApp === r.ruleId ? '' : r.ruleId)}>
+                    <span className="ar-mono" style={{ color: 'var(--accent)', paddingTop: 1 }}>{r.section}</span>
+                    <span className="ar-h3">{r.title}</span>
+                    <span className="ar-rule-line">{openApp === r.ruleId ? '' : r.quote}</span>
+                    <span className="ar-micro">{evLabel(r)}</span>
+                    <span><span className={badgeFor(r.status)}>{statusLabel(r.status)}</span></span>
+                    <svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true" style={{ color: '#8D93A8', marginTop: 2 }}><path d={openApp === r.ruleId ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg>
+                  </button>
+                  {openApp === r.ruleId && <div className="ar-rule-body" style={{ paddingLeft: 76 }}><div className="ar-rule-main">
+                    <div className="ar-quote" style={{ fontSize: 14 }}>{r.quote}<small>Rule {r.section} · {r.source}</small></div>
+                    {r.finding?.reason && <div>{r.finding.reason}</div>}
+                    <button type="button" className="ar-link" style={{ alignSelf: 'flex-start' }} onClick={() => setPage('rules')}>View rule {r.section}<svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></button>
+                  </div></div>}
+                </article>)}
+              </div>)}
+              {!ruleSections.length && <div className="ar-empty"><strong>No applicable rules</strong><span>Rules for this inspection will appear here once the rule pack is pinned.</span></div>}
+            </section>
+            <aside className="ar-card pad ar-side" aria-label="Why these rules apply" style={{ display: 'flex', flexDirection: 'column', gap: 16, flexBasis: 320 }}>
+              <h2 className="ar-h2">Why these rules</h2>
+              <dl className="ar-facts" style={{ gridTemplateColumns: 'minmax(0, 1fr)' }}>
+                <div><dt className="ar-micro">Valve type</dt><dd>{cadModels.find((m: any) => m.model_id === current.model_id)?.display_name || current.model_id}</dd></div>
+                <div><dt className="ar-micro">End connection</dt><dd>Flanged, from the CAD reference</dd></div>
+                <div><dt className="ar-micro">Customer specification or work order</dt><dd style={{ overflowWrap: 'anywhere' }}>None uploaded</dd></div>
+              </dl>
+              {current.lifecycleStatus === 'WAITING' && <>
+                <label htmlFor="ins-spec" className="ar-drop"><svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" /></svg><span><strong>Upload specification</strong><span className="ar-small">Adds rules that compare against order values</span></span></label>
+                <input id="ins-spec" className="ar-sr" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" />
+              </>}
+              {!!leftOut.length && <div className="ar-note">{leftOut.map((r: any) => `${r.title} (${r.section})`).join(', ')} {leftOut.length === 1 ? 'needs' : 'need'} records that are not visual evidence, so {leftOut.length === 1 ? 'it is' : 'they are'} left out until those records are uploaded.</div>}
+              <div>
+                <div className="ar-label" style={{ marginBottom: 6 }}>Left out of this inspection</div>
+                <ul style={{ display: 'flex', flexDirection: 'column', gap: 6, color: 'var(--text-2)', fontSize: 13 }}>
+                  {leftOut.map((r: any) => <li key={r.ruleId}>{r.title}: not evaluated from visual evidence.</li>)}
+                  <li>Rules for other valve types and end connections: filtered by the pinned CAD model.</li>
+                </ul>
+              </div>
+            </aside>
+          </div>
+        </main></div>
+        : tab === 'Documents' ? <div className="ar-scroll"><main className="ar-page" style={{ paddingTop: 20 }}>
+          <div className="ar-bar">
+            <div className="ar-chips">
+              {[['All', allDocs.length], ['Reports', allDocs.filter((d: any) => docCat(d) === 'Reports').length], ['Specifications', allDocs.filter((d: any) => docCat(d) === 'Specifications').length], ['Video', allDocs.filter((d: any) => docCat(d) === 'Video').length], ['Photographs', allDocs.filter((d: any) => docCat(d) === 'Photographs').length], ['Point clouds', allDocs.filter((d: any) => docCat(d) === 'Point clouds').length]].map(([l, n]: any) => <button key={l} type="button" className="ar-chip" aria-pressed={docFilter === l} onClick={() => setDocFilter(l)}>{l} <b>{n}</b></button>)}
+            </div>
+            <div className="ar-spacer"></div>
+            <div className="ar-search" style={{ flex: '0 1 260px' }}>
+              <svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={SEARCH_ICON} /></svg>
+              <label htmlFor="doc-search" className="ar-sr">Search documents</label>
+              <input id="doc-search" className="ar-input" type="search" placeholder="Search files" value={docQ} onChange={e => setDocQ(e.target.value)} />
+            </div>
+          </div>
+          <section className="ar-card" aria-label="Documents and evidence" style={{ overflow: 'hidden' }}>
+            <div className="ar-rows"><div style={{ minWidth: 760 }}>
+              <div className="ar-rowhead" style={{ gridTemplateColumns: '44px minmax(220px, 1fr) 130px 84px 112px 48px' }}><span></span><span>File</span><span>Type</span><span>Size</span><span>Received</span><span></span></div>
+              {docRows.map((d: any, i: number) => <div key={d.evidenceId || d.name + i} className="ar-row static" style={{ gridTemplateColumns: '44px minmax(220px, 1fr) 130px 84px 112px 48px', minHeight: 58 }}>
+                <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 38, overflow: 'hidden', background: 'var(--surface-2)', borderRadius: 8, color: 'var(--text-2)' }}>
+                  {d.type === 'photo' ? <img src={`/api/v1/inspections/${current.id}/evidence/${d.evidenceId}/file`} alt="" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }} /> : <svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={d.type === 'cad' ? 'M12 2l9 5v10l-9 5-9-5V7ZM12 22V12M21 7l-9 5-9-5' : d.type === 'video' ? 'M4 6h11a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2ZM17 10l5-3v10l-5-3' : 'M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8ZM14 3v5h5'} /></svg>}
+                </span>
+                <span style={{ minWidth: 0 }}><span style={{ display: 'block', fontWeight: 600, overflowWrap: 'anywhere' }}>{d.name}</span><span className="ar-micro">{d.evidenceId ? `${d.source}${d.synthetic ? ' \u00B7 synthetic' : ''}` : d.source}</span></span>
+                <span className="ar-small">{docKind(d)}</span>
+                <span className="ar-mono ar-micro">{fmtSize(d.size)}</span>
+                <span className="ar-mono ar-micro">{d.when}</span>
+                {d.evidenceId ? <a className="ar-btn ghost sm icon-only" aria-label={`Download ${d.name}`} href={`/api/v1/inspections/${current.id}/evidence/${d.evidenceId}/file`} download={d.name}><svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16" /></svg></a> : d.type === 'Report' ? <button type="button" className="ar-btn ghost sm icon-only" aria-label={`Download ${d.name}`} onClick={downloadDossier}><svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16" /></svg></button> : <span></span>}
+              </div>)}
+            </div></div>
+            {!docRows.length && <div className="ar-empty"><strong>{allDocs.length ? 'No files match' : 'No documents to display'}</strong><span>{allDocs.length ? 'Try another name or clear the filter.' : 'Evidence and reports for this inspection will appear here as they arrive.'}</span></div>}
+          </section>
+        </main></div>
+        : tab === 'Dossier' ? (() => { const tone = ({ PASS: ['#0B6B4B', '#FFF'], WARNING: ['#FFB547', '#2A1B00'], FAIL: ['#8E2318', '#FFF'], INCONCLUSIVE: ['#2E3A73', '#FFF'], PENDING: ['#2E3A73', '#FFF'] } as any)[current.outcome] || ['#2E3A73', '#FFF']; const notInspected = (sessionRules?.rules || []).filter((r: any) => ['NOT_INSPECTED', 'NOT_APPLICABLE'].includes(r.status)).length; const insuff = (sessionRules?.rules || []).filter((r: any) => r.status === 'INSUFFICIENT_EVIDENCE').length; const regDocs = allDocs.filter((d: any) => d.type !== 'Report' && docCat(d) !== 'Specifications'); return <div className="ar-scroll"><main className="ar-page" style={{ paddingTop: 20, maxWidth: 1028 }}>
+          <div className="ar-bar" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" className="ar-btn secondary" onClick={downloadDossier}><svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16" /></svg>Download dossier</button>
+          </div>
+          <article className="ar-paper">
+            {current.lifecycleStatus === 'TERMINATED' && <div className="ar-paper-banner">Partial dossier. This inspection was terminated early, so evidence and checks are incomplete.</div>}
+            <div className="ar-bar" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 24, paddingBottom: 24, borderBottom: '2px solid var(--paper-ink)' }}>
+              <div style={{ flex: '1 1 380px', minWidth: 0 }}>
+                <div className="ar-small" style={{ fontWeight: 600 }}>Argus inspection dossier</div>
+                <h2 className="ar-h1" style={{ marginTop: 4 }}>{current.name}</h2>
+                <p style={{ marginTop: 10, fontSize: 16 }}>{current.lifecycleStatus === 'TERMINATED' ? 'This inspection stopped before all checks ran. It cannot be read as a pass.' : findingCounts.fail ? `${findingCounts.fail} criterion failed. Review the detailed findings.` : findingCounts.warning ? `${findingCounts.pass} checks passed and ${findingCounts.warning} need review. No criterion failed.` : insuff || notInspected ? 'The inspection ended before all checks ran. The stream is recorded as truncated.' : 'All checks passed on the evidence received.'}</p>
+              </div>
+              <div style={{ flex: '0 1 230px', padding: '16px 18px', borderRadius: 8, background: tone[0], color: tone[1] }}>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Overall conclusion</div>
+                <div style={{ fontSize: 28, lineHeight: 1.15, fontWeight: 700, letterSpacing: '-0.02em' }}>{(current.outcome || 'INCONCLUSIVE').toUpperCase()}</div>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(130px, 100%), 1fr))', gap: 8 }}>
+              {[{ n: evaluated, k: 'Applicable rules evaluated', c: '#12141C' }, { n: findingCounts.pass, k: 'Pass', c: '#0B6B4B' }, { n: findingCounts.warning, k: 'Warning', c: '#7A4900' }, { n: findingCounts.fail, k: 'Fail', c: '#8E2318' }, { n: insuff + (sessionRules?.rules || []).filter((r: any) => r.status === 'NOT_INSPECTED').length, k: 'Insufficient or not inspected', c: '#4D5365' }].map((x: any) => <div key={x.k} className="ar-paper-tile"><div style={{ fontSize: 28, lineHeight: 1.1, fontWeight: 700, color: x.c }}>{x.n}</div><div className="ar-small">{x.k}</div></div>)}
+            </div>
+            <section><h3 className="ar-h2" style={{ marginBottom: 8 }}>Inspection identification</h3>
+              {[{ k: 'Inspection ID', v: current.id }, { k: 'Lifecycle status', v: current.lifecycleStatus.toLowerCase() }, { k: 'Started', v: fmtDate(current.createdAt) }, { k: 'Closed', v: current.closedAt ? fmtDate(current.closedAt) : 'Finalizing' }, { k: 'Operator action', v: current.lifecycleStatus === 'TERMINATED' ? 'terminated' : 'normal_close' }].map((x: any) => <div key={x.k} className="ar-paper-row" style={{ gridTemplateColumns: '180px minmax(0, 1fr)' }}><span className="ar-muted">{x.k}</span><span>{x.v}</span></div>)}
+            </section>
+            <section><h3 className="ar-h2" style={{ marginBottom: 8 }}>Reference baseline</h3>
+              {[{ k: 'CAD', v: `${cadFile} \u00B7 rev ${current.cadRevision} \u00B7 sha256 ${current.cadSha256?.slice(0, 16)}\u2026` }, { k: 'Applicable rules', v: `${totalRules} selected from valve type \u00B7 pinned rule pack` }, { k: 'Rule sources', v: [...new Set((sessionRules?.rules || []).map((r: any) => r.source))].join(', ') || 'Pinned rule pack' }].map((x: any) => <div key={x.k} className="ar-paper-row" style={{ gridTemplateColumns: '180px minmax(0, 1fr)' }}><span className="ar-muted">{x.k}</span><span>{x.v}</span></div>)}
+            </section>
+            <section><h3 className="ar-h2" style={{ marginBottom: 8 }}>Detailed findings</h3>
+              {(sessionRules?.rules || []).map((r: any) => <div key={r.ruleId} className="ar-paper-row" style={{ gridTemplateColumns: '124px minmax(0, 1fr) 150px', alignItems: 'start' }}>
+                <span style={{ fontWeight: 700, color: ({ PASS: '#0B6B4B', WARNING: '#7A4900', FAIL: '#8E2318', INSUFFICIENT_EVIDENCE: '#1F5C8A', NOT_INSPECTED: '#4D5365', NOT_APPLICABLE: '#4D5365', ANALYZING: '#1F5C8A' } as any)[r.status] || '#4D5365' }}>{statusLabel(r.status)}</span>
+                <span><span style={{ display: 'block', fontWeight: 600 }}>{r.title}</span><span className="ar-muted" style={{ display: 'block' }}>{r.finding?.reason || 'Not evaluated.'}</span></span>
+                <span className="ar-muted">Rule {r.section}</span>
+              </div>)}
+            </section>
+            <section><h3 className="ar-h2" style={{ marginBottom: 8 }}>Evidence register</h3>
+              <p className="ar-small" style={{ marginBottom: 6 }}>{regDocs.length} files received. First six shown. All are listed under Documents.</p>
+              {regDocs.slice(0, 6).map((d: any, i: number) => <div key={d.evidenceId || i} className="ar-paper-row" style={{ gridTemplateColumns: '86px 130px minmax(0, 1fr) 100px' }}><span className="ar-mono">{d.when}</span><span>{docKind(d)}</span><span style={{ overflowWrap: 'anywhere' }}>{d.name}</span><span className="ar-mono">{d.sha256 ? d.sha256.slice(0, 8) : '—'}</span></div>)}
+            </section>
+            <section><h3 className="ar-h2" style={{ marginBottom: 8 }}>Activity and caveats</h3>
+              {[{ t: current.producerComplete ? 'Feeder completed. Producer-complete signal received.' : 'No producer-complete signal. Stream may be truncated.' }, { t: current.lifecycleStatus === 'TERMINATED' ? 'Terminate Now confirmed by the operator.' : 'End Inspection confirmed by the operator.' }, { t: 'Findings do not establish crack depth, leak tightness or bolt torque.' }, ...(allDocs.some((d: any) => d.synthetic) ? [{ t: 'All simulated evidence is marked synthetic.' }] : [])].map((n: any, i: number) => <div key={i} className="ar-paper-row">{n.t}</div>)}
+            </section>
+          </article>
+        </main></div>; })()
         : <div className={`ar-live${closed ? ' closed' : ''}`}>
           <div className="ar-evidence" aria-label="Evidence">
             <div className="ar-bar" style={{ flex: 'none', justifyContent: 'space-between', gap: 8, minHeight: 30 }}>
@@ -220,7 +350,7 @@ export default function App() {
               {current.lifecycleStatus === 'WAITING' && <button type="button" className="ar-btn secondary sm" onClick={() => window.open(`http://${location.hostname}:4173`, '_blank')}>Prototype: run simulated feed</button>}
               {closed && <div className="ar-bar" style={{ justifyContent: 'space-between' }}>
                 <span className={outcomeClass(current.outcome)}>Outcome: {titleCase(current.outcome)}</span>
-                <a className="ar-btn secondary sm" href={`/api/v1/inspections/${current.id}/dossier`} target="_blank" rel="noreferrer">Open Dossier</a>
+                <button type="button" className="ar-btn secondary sm" onClick={() => setTab('Dossier')}>Open Dossier</button>
               </div>}
             </section>
             {!closed && <>
@@ -345,8 +475,8 @@ export default function App() {
               <span><span className={outcomeClass(r.outcome)}>{titleCase(r.outcome)}</span></span>
               <span className="ar-micro">{r.findings?.total ? ([r.findings.pass && `${r.findings.pass} Pass`, r.findings.warning && `${r.findings.warning} Warning`, r.findings.fail && `${r.findings.fail} Fail`].filter(Boolean).join(' · ') || 'No passed checks yet') : 'No findings yet'}</span>
               <span className="ar-bar" style={{ justifyContent: 'flex-end', gap: 8 }}>
-                <a className="ar-btn secondary sm" href={`/api/v1/inspections/${r.sessionId}/dossier`} target="_blank" rel="noreferrer">View</a>
-                <a className="ar-btn ghost sm" href={`/api/v1/inspections/${r.sessionId}/dossier`} download={`dossier-${r.sessionId}.html`}>Download</a>
+                <button type="button" className="ar-btn secondary sm" onClick={async () => { const i = await api(`/api/v1/inspections/${r.sessionId}`); if (i?.id) { setCurrent(i); setTab('Dossier'); setPage('session'); } }}>View</button>
+                <button type="button" className="ar-btn ghost sm" onClick={async () => { const j = await api(`/api/v1/inspections/${r.sessionId}/dossier`); const blob = new Blob([j.html || ''], { type: 'text/html' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${r.sessionId}_dossier.html`; a.click(); URL.revokeObjectURL(a.href); }}>Download</button>
               </span></div>)}
           </div></div>
           {!filteredReports.length && (reports.length ? <div className="ar-empty"><strong>No reports match</strong><span>Try another name or clear the filter.</span></div> : <div className="ar-empty"><strong>No reports to display</strong><span>Complete an inspection and its dossier will appear here. Create one from Home to get started.</span></div>)}

@@ -228,7 +228,15 @@ export async function buildServer() {
     return reply.type(mime[path.extname(ev.filename).toLowerCase()] || 'application/octet-stream').send(fs.createReadStream(fp));
   });
   app.get('/api/v1/inspections/:id/findings', async (req: any) => db.findings.filter((f: any) => f.sessionId === req.params.id));
-  app.get('/api/v1/inspections/:id/documents', async (req: any) => { const ev = db.evidence.filter((e: any) => e.sessionId === req.params.id); const dos = db.dossiers.filter((d: any) => d.sessionId === req.params.id); return { documents: [...ev.map((e: any) => ({ name: e.filename, type: e.mediaType, size: e.size, source: e.sourceId, at: e.at })), ...dos.map((d: any) => ({ name: `dossier-${d.sessionId}.html`, type: 'Report', size: d.size, source: 'argus', at: d.at }))], total: ev.length + dos.length }; });
+  app.get('/api/v1/inspections/:id/documents', async (req: any, reply) => { const insp = getInsp(req.params.id); if (!insp) return reply.code(404).send({ error: 'not found' }); const ev = db.evidence.filter((e: any) => e.sessionId === req.params.id); const dos = db.dossiers.filter((d: any) => d.sessionId === req.params.id);
+    const rel = (at: string) => { const s = Math.max(0, Math.round((new Date(at).getTime() - new Date(insp.createdAt).getTime()) / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+    const model = cadModels.find((m: any) => m.model_id === insp.model_id);
+    const stat = (relPath: string) => { try { return fs.statSync(path.join(root, relPath)).size; } catch { return 0; } };
+    const pinned: any[] = [];
+    if (model?.cad_file) pinned.push({ name: path.basename(model.cad_file), type: 'cad', kind: 'CAD baseline', size: stat(path.join('src', model.cad_file)), source: 'Pinned reference', at: insp.createdAt, when: '00:00', sha256: insp.cadSha256 });
+    pinned.push({ name: 'rules.json', type: 'rules', kind: 'Rule snapshot', size: stat('src/reference-data/cvs6000d-48-demo/rules/rules.json'), source: 'Pinned reference', at: insp.createdAt, when: '00:00', sha256: null });
+    const docs = [...ev.map((e: any) => ({ name: e.filename, type: e.mediaType, size: e.size, source: e.sourceId, synthetic: e.synthetic, at: e.at, when: rel(e.at), evidenceId: e.evidenceId, sha256: e.sha256 })), ...pinned, ...dos.map((d: any) => ({ name: `${d.sessionId}_dossier.html`, type: 'Report', kind: 'Report', size: d.size, source: 'Generated at closure', at: d.at, when: 'At closure', sha256: null }))];
+    return { documents: docs, total: docs.length }; });
   app.get('/api/v1/inspections/:id/events', async (req: any, reply) => {
     const id = req.params.id; reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     if (!listeners.has(id)) listeners.set(id, new Set()); listeners.get(id)!.add(reply.raw);
