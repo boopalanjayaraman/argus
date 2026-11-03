@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { parsePly, mergeClouds } from './pointcloud';
+import { boxAt } from './annotations';
 
 export type Viewer =
   | { kind: 'photo'; index: number }
-  | { kind: 'video' }
+  | { kind: 'video'; tab?: 'original' | 'analyzed' }
   | { kind: 'pointcloud' }
   | { kind: 'cad' };
 
@@ -144,7 +145,74 @@ function PhotoWithMasks({ sessionId, photo, src }: { sessionId: string; photo: a
   );
 }
 
-export default function ViewerDialog({ viewer, sessionId, photos, videos, pcs, cadUrl, onClose, onPhoto }: {
+/** Analyzed video (display only): the merged video with SAM 3.1 tracks and
+ * lightly worded hints drawn from the session's FAIL / WARNING findings. */
+function AnalyzedVideo({ sessionId, onShowFindings }: { sessionId: string; onShowFindings?: () => void }) {
+  const [ann, setAnn] = useState<any>(null);
+  const [t, setT] = useState(0);
+  const [allParts, setAllParts] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const load = () => fetch(`/api/v1/inspections/${sessionId}/video/annotations`).then(r => r.json()).then(setAnn).catch(() => setAnn({ status: 'failed', reason: 'Could not load annotations' }));
+  useEffect(() => { load(); }, [sessionId]);
+  useEffect(() => {
+    if (!ann || !['queued', 'running'].includes(ann.status)) return;
+    const id = setInterval(load, 4000); return () => clearInterval(id);
+  }, [ann?.status]);
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => { if (videoRef.current) setT(videoRef.current.currentTime); raf = requestAnimationFrame(tick); };
+    raf = requestAnimationFrame(tick); return () => cancelAnimationFrame(raf);
+  }, [ann?.status]);
+  const analyze = async () => { await fetch(`/api/v1/inspections/${sessionId}/track-video`, { method: 'POST' }); load(); };
+
+  if (!ann) return <div className="ar-empty"><strong>Loading the analyzed video…</strong></div>;
+  if (ann.status !== 'ready') {
+    const busy = ['queued', 'running'].includes(ann.status);
+    return <div className="ar-empty" style={{ padding: '48px 20px' }}>
+      <strong>{busy ? 'Following the valve parts through the video…' : ann.status === 'failed' ? 'The video could not be analyzed' : 'This video has not been analyzed yet'}</strong>
+      <span>{busy ? 'SAM 3.1 is tracking each part frame by frame. This view updates when it finishes.' : ann.reason || 'Tracking runs automatically when the stream completes; you can also start it now.'}</span>
+      {!busy && <button type="button" className="ar-btn secondary sm" style={{ marginTop: 8 }} onClick={analyze}>Analyze video</button>}
+    </div>;
+  }
+  const labelsFor = (id: string) => (ann.labels || []).filter((l: any) => l.componentId === id);
+  const tone = (s: string) => s === 'FAIL' ? '#FF9A8F' : '#FFC554';
+  const W = ann.width || 1280, H = ann.height || 720;
+  const shown = (ann.components || []).flatMap((c: any) => c.objects.map((o: any) => ({ c, o, box: boxAt(o.frames, ann.fps, t), labels: labelsFor(c.id) })))
+    .filter((x: any) => x.box && (allParts || x.labels.length));
+  return <>
+    <div style={{ position: 'relative', width: '100%', maxWidth: `calc(62vh * ${W / H})`, aspectRatio: `${W} / ${H}`, margin: '0 auto', background: '#07080C', borderRadius: 8, overflow: 'hidden' }}>
+      <video ref={videoRef} controls src={`/api/v1/inspections/${sessionId}/video/merged`} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label="Tracked parts and possible issues" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+        {shown.map(({ c, o, box, labels }: any) => {
+          const [l, tp, r, b] = box; const col = labels.length ? tone(labels.some((x: any) => x.status === 'FAIL') ? 'FAIL' : 'WARNING') : '#8D93A8';
+          const fs = Math.max(16, W / 58);
+          const lines = labels.length ? labels.slice(0, 2).map((x: any) => `Rule ${x.rule} · ${x.text}`) : [c.id.replace(/_/g, ' ')];
+          if (labels.length > 2) lines.push(`+${labels.length - 2} more in findings`);
+          const lh = fs + 8, padX = 6;
+          const tw = Math.min(W - 8, Math.max(...lines.map((x: string) => x.length)) * fs * 0.56 + padX * 2);
+          const x0 = Math.max(4, Math.min(l, W - tw - 4));
+          const above = tp - lines.length * lh - 4;
+          const y0 = above >= 4 ? above : Math.min(b + 4, H - lines.length * lh - 4);
+          return <g key={`${c.id}-${o.objectId}`}>
+            <rect x={l} y={tp} width={r - l} height={b - tp} fill="none" stroke={col} strokeWidth={Math.max(2, W / 500)} strokeDasharray={labels.length ? undefined : '6 4'} rx={4} />
+            <rect x={x0} y={y0} width={tw} height={lines.length * lh} rx={5} fill="#0A0B10" fillOpacity={0.78} stroke={col} strokeOpacity={0.6} />
+            {lines.map((txt: string, i: number) => <text key={i} x={x0 + padX} y={y0 + (i + 1) * lh - 6} fill={col} fontSize={fs} fontWeight={600} textLength={txt.length * fs * 0.56 > tw - padX * 2 ? tw - padX * 2 : undefined} lengthAdjust="spacingAndGlyphs">{txt}</text>)}
+          </g>;
+        })}
+      </svg>
+    </div>
+    <div className="ar-bar" style={{ justifyContent: 'space-between', gap: 10, flex: 'none' }}>
+      <span className="ar-micro">{(ann.labels || []).length ? `${(ann.labels || []).length} possible ${(ann.labels || []).length === 1 ? 'issue' : 'issues'} shown on the parts they concern. These are hints from the findings, not verdicts.` : 'No possible issues on the tracked parts. Dashed boxes show the parts SAM 3.1 followed.'}{ann.current === false ? ' New video arrived after this analysis.' : ''}</span>
+      <span className="ar-bar" style={{ gap: 8 }}>
+        <button type="button" className="ar-btn ghost sm" onClick={() => setAllParts(!allParts)}>{allParts ? 'Hide other parts' : 'Show all tracked parts'}</button>
+        {ann.current === false && <button type="button" className="ar-btn ghost sm" onClick={analyze}>Re-analyze</button>}
+        {onShowFindings && <button type="button" className="ar-btn secondary sm" onClick={onShowFindings}>Check the findings</button>}
+      </span>
+    </div>
+  </>;
+}
+
+export default function ViewerDialog({ viewer, sessionId, photos, videos, pcs, cadUrl, onClose, onPhoto, onShowFindings }: {
   viewer: Viewer;
   sessionId: string;
   photos: any[];
@@ -153,7 +221,9 @@ export default function ViewerDialog({ viewer, sessionId, photos, videos, pcs, c
   cadUrl: string;
   onClose: () => void;
   onPhoto: (index: number) => void;
+  onShowFindings?: () => void;
 }) {
+  const [videoTab, setVideoTab] = useState<'original' | 'analyzed'>(viewer.kind === 'video' && viewer.tab === 'analyzed' ? 'analyzed' : 'original');
   const [pcStats, setPcStats] = useState('Loading point-cloud chunks…');
   const [videoFallback, setVideoFallback] = useState(false);
   useEffect(() => {
@@ -199,6 +269,15 @@ export default function ViewerDialog({ viewer, sessionId, photos, videos, pcs, c
         )}
 
         {viewer.kind === 'video' && videos.length > 0 && (
+          <div className="ar-tabs" role="tablist" aria-label="Video views" style={{ flex: 'none', borderBottom: '1px solid var(--line)' }}>
+            <button type="button" className="ar-tab" role="tab" aria-selected={videoTab === 'original'} onClick={() => setVideoTab('original')}>Original video</button>
+            <button type="button" className="ar-tab" role="tab" aria-selected={videoTab === 'analyzed'} onClick={() => setVideoTab('analyzed')}>Analyzed video</button>
+          </div>
+        )}
+
+        {viewer.kind === 'video' && videos.length > 0 && videoTab === 'analyzed' && <AnalyzedVideo sessionId={sessionId} onShowFindings={onShowFindings} />}
+
+        {viewer.kind === 'video' && videos.length > 0 && videoTab === 'original' && (
           <video key={videoFallback ? videos[videos.length - 1].evidenceId : 'merged'} controls autoPlay
             src={videoFallback ? fileUrl(videos[videos.length - 1]) : `/api/v1/inspections/${sessionId}/video/merged`}
             onError={() => setVideoFallback(true)}

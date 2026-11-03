@@ -323,3 +323,87 @@ def review_visual(evidence_path: str, rule: dict, screen: dict | None = None, so
     if isinstance(screen, str):  # tolerate the legacy positional call
         source, screen = screen, None
     return _visual(REVIEW_MODEL, evidence_path, rule, source)
+
+
+# --- SAM 3.1 video tracking (display-only annotations) ----------------------
+
+def parse_sam_video_events(events: list[dict], min_confidence: float = SAM_MIN_CONFIDENCE) -> dict:
+    """SAM video stream events -> {objects:[{objectId, frames:[[frame, left, top, right, bottom, confidence]]}]}.
+    Boxes only: per-frame masks are not needed to draw a tracked label."""
+    import meta_sam_parser as msp
+
+    async def source():
+        for e in events:
+            yield e
+
+    async def run():
+        return await msp.parse_responses_stream(source(), msp.video_segmentation_format()).final_result()
+
+    result = asyncio.run(run())
+    objects: dict[str, list] = {}
+    for rec in result.records:
+        if rec.kind != "box":
+            continue
+        conf = rec.confidence if rec.confidence is not None else 1.0
+        if conf < min_confidence:
+            continue
+        objects.setdefault(str(rec.object_id), []).append([rec.frame.frame_index, rec.left, rec.top, rec.right, rec.bottom, round(conf, 3)])
+    return {"objects": [{"objectId": oid, "frames": sorted(fr)} for oid, fr in objects.items()],
+            "outcome": getattr(result.outcome, "status", str(result.outcome))}
+
+
+def _sam_video_events(file_id: str, concept: str, timeout_s: float) -> list[dict]:
+    payload = {"model": SAM_MODEL, "stream": True,
+               "metadata": {"include_confidence": "true", "mask_encoding": "one_bit"},
+               "input": [{"type": "message", "role": "user", "content": [
+                   {"type": "input_text", "text": concept}, {"type": "input_video", "file_id": file_id}]}]}
+    req = urllib.request.Request(API_BASE + "/responses", data=json.dumps(payload).encode(),
+                                 headers={"Authorization": f"Bearer {os.environ['META_API_KEY']}",
+                                          "Content-Type": "application/json"}, method="POST")
+    events: list[dict] = []
+    with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+        for raw in resp:
+            line = raw.decode(errors="replace").strip()
+            if not line.startswith("data:") or line[5:].strip() in ("", "[DONE]"):
+                continue
+            try:
+                events.append(json.loads(line[5:]))
+            except json.JSONDecodeError:
+                continue
+    return events
+
+
+def track_video(video_path: str, components: list[dict]) -> dict:
+    """Track each component through a video with SAM 3.1 (one concept per
+    request, in parallel) on a low-fps proxy; cached by (proxy, concept).
+    Returns {fps, width, height, duration, model, components:[{id, prompt, objects, seconds, error?}]}."""
+    if not _configured():
+        return {"status": "unavailable", "reason": "META_API_KEY not set or META_ADAPTER_LIVE!=1", "components": []}
+    proxy = media.analysis_proxy(video_path)
+    timeout_s = float(os.environ.get("SAM_VIDEO_TIMEOUT_MS", "900000")) / 1000.0
+    proxy_sha = media.sha256_file(proxy["path"])
+    file_id: dict[str, str] = {}
+
+    def one(comp: dict) -> dict:
+        key = hashlib.sha256(f"{proxy_sha}|{comp['samPrompt']}|{SAM_MODEL}|video".encode()).hexdigest()
+        cache_file = os.path.join(media.CACHE_DIR, f"samvid-{key}.json")
+        try:
+            if os.path.exists(cache_file):
+                parsed = json.loads(open(cache_file).read())
+            else:
+                with _SAM_LOCK:
+                    if "id" not in file_id:
+                        file_id["id"] = _upload_file(proxy["path"], timeout_s)
+                started = time.time()
+                parsed = parse_sam_video_events(_sam_video_events(file_id["id"], comp["samPrompt"], timeout_s))
+                parsed["seconds"] = round(time.time() - started, 1)
+                with open(cache_file, "w") as fh:
+                    fh.write(json.dumps(parsed))
+            return {"id": comp["id"], "prompt": comp["samPrompt"], "objects": parsed["objects"], "seconds": parsed.get("seconds")}
+        except Exception as exc:
+            return {"id": comp["id"], "prompt": comp["samPrompt"], "objects": [], "error": str(exc)[:200]}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, SAM_CONCURRENCY)) as pool:
+        tracked = list(pool.map(one, components))
+    return {"status": "ready", "fps": proxy["fps"], "width": proxy["width"], "height": proxy["height"],
+            "duration": proxy["duration"], "model": SAM_MODEL, "components": tracked}

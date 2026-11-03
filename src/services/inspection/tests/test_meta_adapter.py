@@ -94,3 +94,19 @@ def test_order_rules_extracted_from_work_order_pdf():
     # WO-R07 continues across a page break and needs test records
     assert rules["WO-R07"]["quote"].endswith("Without actual test data result is NOT EVALUATED.")
     assert rules["WO-R07"]["applicability"] == "REFERENCE_ONLY"
+
+
+def test_sam_video_stream_parsing_real_recording():
+    # A real SAM 3.1 video stream ("bolts on valve bonnet", 5 fps proxy of
+    # the finished-valve clip): stable object ids tracked across frames.
+    import json
+    events = json.loads((pathlib.Path(__file__).parent / "fixtures" / "sam_video_stream_bonnet_bolts.json").read_text())
+    out = meta_adapter.parse_sam_video_events(events, min_confidence=0.0)
+    assert out["outcome"] == "completed"
+    ids = {o["objectId"] for o in out["objects"]}
+    assert len(ids) >= 2
+    for obj in out["objects"]:
+        frames = [f[0] for f in obj["frames"]]
+        assert frames == sorted(frames) and len(frames) > 5
+        f, l, t, r, b, c = obj["frames"][0]
+        assert r > l and b > t and 0 <= c <= 1

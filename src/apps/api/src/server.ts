@@ -4,6 +4,8 @@ import fastifyStatic from '@fastify/static';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import http from 'node:http';
+import https from 'node:https';
 import { fileURLToPath } from 'node:url';
 import { storageMode, putObjectIfConfigured } from './storage.js';
 import { mongoStore } from './db.js';
@@ -29,6 +31,8 @@ fs.mkdirSync(path.join(DATA, 'evidence'), { recursive: true });
 const cadModels = JSON.parse(fs.readFileSync(path.join(root, 'src/cad_models.json'), 'utf8')).cad_models;
 const ORDER_EXTENSIONS = ['.pdf', '.docx', '.xlsx'];
 const CLOSED = ['COMPLETED', 'TERMINATED'];
+/** Job kinds that never hold a session in ANALYZING or delay closure. */
+const DISPLAY_ONLY: ('tracking')[] = ['tracking'];
 const DECIDED = ['PASS', 'WARNING', 'FAIL'];
 
 /** Stride-sample a binary PLY to at most `max` vertices (header rewritten). */
@@ -206,6 +210,29 @@ export function geometryReason(rule: any, status: string, reg: any): string {
   return `${status === 'PASS' ? 'Within' : status === 'FAIL' ? 'Outside' : 'Not decidable:'} approved scan limits · ${conds.map(fmt).join(' · ')} · merged scan of ${reg?.mergedChunks ?? '?'} chunks vs CAD`;
 }
 
+/** Short, lightly worded label for a finding drawn on the analyzed video:
+ * the model's own observation, trimmed, never a verdict. */
+export function annotationText(status: string, reason: string): string {
+  const note = String(reason || '').split(' · ')[0].replace(/\s+/g, ' ').trim().replace(/\.$/, '');
+  const short = note.length <= 64 ? note : note.slice(0, 64).replace(/\s+\S*$/, '') + '…';
+  return `${status === 'FAIL' ? 'Possible issue' : 'Worth a look'}: ${short ? short.charAt(0).toLowerCase() + short.slice(1) : 'see findings'}`;
+}
+
+/** Attach FAIL / WARNING findings to tracked components (display only). */
+export function videoLabels(rules: any[], tracks: any): any[] {
+  const tracked = new Set((tracks?.components || []).filter((c: any) => (c.objects || []).length).map((c: any) => c.id));
+  const byComponent: Record<string, string[]> = tracks?.componentRules || {};
+  const out: any[] = [];
+  for (const r of rules) {
+    if (!['FAIL', 'WARNING'].includes(r.status) || !r.finding) continue;
+    for (const [componentId, codes] of Object.entries(byComponent)) {
+      if (!tracked.has(componentId) || !(codes as string[]).includes(r.ruleId)) continue;
+      out.push({ componentId, ruleId: r.ruleId, rule: r.code || r.ruleId, title: r.title, status: r.status, text: annotationText(r.status, r.finding.reason) });
+    }
+  }
+  return out;
+}
+
 /** Stream order for video segments: sequence, then capture time. */
 export function orderVideos(evidences: any[]): any[] {
   return evidences.filter((e: any) => e.mediaType === 'video')
@@ -297,7 +324,7 @@ export async function buildServer() {
   function updateLifecycle(insp: any) {
     if (!insp || CLOSED.includes(insp.lifecycleStatus) || insp.lifecycleStatus === 'FINALIZING') return;
     const ev = db.evidence.filter(e => e.sessionId === insp.id).length;
-    const next = !ev ? 'WAITING' : queue.pending(insp.id).length ? 'ANALYZING' : insp.producerComplete ? 'READY_TO_CLOSE' : 'RECEIVING';
+    const next = !ev ? 'WAITING' : queue.pending(insp.id, DISPLAY_ONLY).length ? 'ANALYZING' : insp.producerComplete ? 'READY_TO_CLOSE' : 'RECEIVING';
     if (next !== insp.lifecycleStatus) { insp.lifecycleStatus = next; emit(db, insp.id, 'source.state', { lifecycleStatus: next }); }
   }
   function refresh(insp: any) {
@@ -309,11 +336,11 @@ export async function buildServer() {
     const sts = applicable.map((r: any) => r.status);
     const cc = (s: string) => sts.filter((x: string) => x === s).length;
     insp.findings = { pass: cc('PASS'), warning: cc('WARNING'), fail: cc('FAIL'), insufficient: cc('INSUFFICIENT_EVIDENCE'), unchecked: cc('NOT_INSPECTED'), total: sts.length };
-    insp.analysis = { pending: queue.pending(insp.id).length, done: ev.filter(e => e.processingStatus === 'done').length };
+    insp.analysis = { pending: queue.pending(insp.id, DISPLAY_ONLY).length, done: ev.filter(e => e.processingStatus === 'done').length };
   }
 
   const queue = new AnalysisQueue(
-    { visual: Number(process.env.ANALYSIS_CONCURRENCY || 3), geometry: 1 },
+    { visual: Number(process.env.ANALYSIS_CONCURRENCY || 3), geometry: 1, tracking: 1 },
     (job: Job) => {
       const insp = getInsp(job.sessionId);
       const ev = job.evidenceId ? db.evidence.find(e => e.evidenceId === job.evidenceId && e.sessionId === job.sessionId) : null;
@@ -341,14 +368,31 @@ export async function buildServer() {
     return true;
   }
 
-  async function postJson(url: string, body: any, signal?: AbortSignal, timeoutMs = 1200000) {
-    const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-    const onAbort = () => ctrl.abort(); signal?.addEventListener('abort', onAbort);
-    try {
-      const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify(body) });
-      if (!resp.ok) throw new Error(`${new URL(url).pathname} ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
-      return await resp.json();
-    } finally { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); }
+  /** POST JSON to the inspection service. Plain node:http rather than
+   * fetch: fetch gives up when response headers take longer than 300 s,
+   * and SAM video tracking / long visual screens legitimately do. The only
+   * limits are `timeoutMs` and the caller's abort signal. */
+  function postJson(url: string, body: any, signal?: AbortSignal, timeoutMs = 1200000): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const u = new URL(url); const payload = Buffer.from(JSON.stringify(body));
+      const mod = u.protocol === 'https:' ? https : http;
+      const req = mod.request(u, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': payload.length } }, res => {
+        const chunks: Buffer[] = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf8');
+          if ((res.statusCode || 0) >= 400) return reject(new Error(`${u.pathname} ${res.statusCode}: ${text.slice(0, 200)}`));
+          try { resolve(JSON.parse(text)); } catch (e) { reject(e); }
+        });
+        res.on('error', reject);
+      });
+      const timer = setTimeout(() => req.destroy(new Error(`${u.pathname} timed out after ${Math.round(timeoutMs / 1000)} s`)), timeoutMs);
+      const onAbort = () => req.destroy(new Error('aborted'));
+      signal?.addEventListener('abort', onAbort);
+      req.on('error', reject);
+      req.on('close', () => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); });
+      req.end(payload);
+    });
   }
 
   /** One photo or video segment: SAM routing + Muse screening against the
@@ -402,6 +446,39 @@ export async function buildServer() {
     queue.enqueue(insp.id, `geometry:${insp.id}`, 'geometry', (signal) => runComparison(insp, signal));
   }
 
+  /** Display-only: track the session's relevant components through the
+   * merged video (SAM 3.1 video, low-fps proxy). Allowed on closed
+   * sessions too — it never touches findings, only adds an overlay. */
+  const videoSig = (insp: any) => { const v = orderVideos(db.evidence.filter(e => e.sessionId === insp.id)); return v.length ? `${v.length}-${v[v.length - 1].evidenceId}` : ''; };
+  function scheduleTracking(insp: any) {
+    if (!orderVideos(db.evidence.filter(e => e.sessionId === insp.id)).length) return false;
+    insp.videoTracking = { status: 'queued', at: new Date().toISOString() };
+    queue.enqueue(insp.id, `tracking:${insp.id}`, 'tracking', (signal) => runTracking(insp, signal));
+    return true;
+  }
+  async function runTracking(insp: any, signal: AbortSignal) {
+    const sig = videoSig(insp);
+    insp.videoTracking = { status: 'running', at: new Date().toISOString() }; saveDB(db);
+    try {
+      await mergedVideoFile(insp);
+      const snap = snapshotFor(insp);
+      const data = await postJson(`${INSPECTION_URL}/track-video`, {
+        sessionId: insp.id, url: `${EVIDENCE_BASE}/api/v1/inspections/${insp.id}/video/merged?v=${encodeURIComponent(sig)}`, filename: 'merged.mp4',
+        family: snap.model.family, type: snap.model.type, rules: snap.rules.filter(evaluable),
+      }, signal, 1800000);
+      if (signal.aborted) return;
+      const observationId = `obs-${insp.id}-video-tracks`;
+      db.observations = db.observations.filter(o => o.observationId !== observationId);
+      db.observations.push({ observationId, sessionId: insp.id, evidenceId: null, kind: 'video_tracks', model: data.model, at: new Date().toISOString(), payload: { ...data, videoSignature: sig } });
+      insp.videoTracking = { status: data.status === 'ready' ? 'ready' : data.status || 'failed', reason: data.reason, at: new Date().toISOString() };
+      emit(db, insp.id, 'observation.created', { observationId, kind: 'video_tracks' }); saveDB(db);
+    } catch (e: any) {
+      if (signal.aborted) return;
+      insp.videoTracking = { status: 'failed', reason: String(e?.message || e).slice(0, 300), at: new Date().toISOString() }; saveDB(db);
+      throw e;
+    }
+  }
+
   async function runComparison(insp: any, signal: AbortSignal) {
     const pcs = db.evidence.filter((e: any) => e.sessionId === insp.id && e.mediaType === 'pointcloud');
     if (!pcs.length) { insp.geometry = { status: 'insufficient', reason: 'No point-cloud chunks received', at: new Date().toISOString() }; saveDB(db); return; }
@@ -443,9 +520,9 @@ export async function buildServer() {
   async function finalize(insp: any, terminated: boolean) {
     let leftover: Job[] = [];
     if (!terminated) {
-      const { remaining } = await queue.drain(insp.id, CLOSE_DRAIN_TIMEOUT_MS);
-      if (remaining.length) leftover = queue.cancel(insp.id);
-    } else leftover = queue.cancel(insp.id);
+      const { remaining } = await queue.drain(insp.id, CLOSE_DRAIN_TIMEOUT_MS, DISPLAY_ONLY);
+      if (remaining.length) leftover = queue.cancel(insp.id, DISPLAY_ONLY);
+    } else leftover = queue.cancel(insp.id, DISPLAY_ONLY);
     insp.incompleteAnalysis = leftover.map(j => ({ kind: j.kind, evidenceId: j.evidenceId || null, reason: terminated ? 'Cancelled by Terminate Now' : `Not finished within ${Math.round(CLOSE_DRAIN_TIMEOUT_MS / 1000)} s drain window` }));
     for (const j of leftover) {
       const ev = j.evidenceId ? db.evidence.find(e => e.evidenceId === j.evidenceId && e.sessionId === insp.id) : null;
@@ -612,6 +689,22 @@ export async function buildServer() {
     }
     return reply.header('Content-Length', size).send(fs.createReadStream(file));
   });
+  app.post('/api/v1/inspections/:id/track-video', async (req: any, reply) => {
+    const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
+    if (!scheduleTracking(i)) return reply.code(409).send({ error: { code: 'NO_VIDEO', message: 'No video received in this session' } });
+    saveDB(db); return reply.code(202).send({ ok: true, status: 'queued' });
+  });
+  app.get('/api/v1/inspections/:id/video/annotations', async (req: any, reply) => {
+    const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
+    const obs = db.observations.find(o => o.sessionId === i.id && o.kind === 'video_tracks');
+    const state = i.videoTracking?.status || (obs ? 'ready' : 'none');
+    if (!obs) return { status: state, reason: i.videoTracking?.reason || null, labels: [], components: [] };
+    const t = obs.payload;
+    return { status: state, reason: i.videoTracking?.reason || null, fps: t.fps, width: t.width, height: t.height, duration: t.duration, model: obs.model,
+      videoSignature: t.videoSignature, current: t.videoSignature === videoSig(i),
+      components: (t.components || []).map((c: any) => ({ id: c.id, prompt: c.prompt, objects: c.objects || [], error: c.error || null })),
+      labels: videoLabels(sessionRules(i), t) };
+  });
   app.get('/api/v1/inspections/:id/evidence/:evidenceId/file', async (req: any, reply) => {
     const ev = db.evidence.find((e: any) => e.sessionId === req.params.id && e.evidenceId === req.params.evidenceId);
     if (!ev) return reply.code(404).send({ error: 'evidence not found' });
@@ -719,6 +812,7 @@ export async function buildServer() {
     const vids = orderVideos(db.evidence.filter(e => e.sessionId === i.id));
     const last = vids[vids.length - 1];
     if (last && last.processingStatus === 'sampled_out') { last.processingStatus = 'queued'; delete last.processingNote; enqueueVisual(i, last); }
+    scheduleTracking(i);
     updateLifecycle(i); saveDB(db);
     return { ok: true, sessionOpen: true };
   });

@@ -14,5 +14,6 @@ One feature at a time. **Review a PRD, edit it here if needed, then say `go PRD-
 | 08 | [Closure, dossier & Reports](PRD-08-closure-dossier-and-reports.md) | 05, 06, 07 | Implemented v2 (drain/cancel, dossier citations) |
 | 09 | [Evidence viewer dialog](PRD-09-evidence-viewer-dialog.md) | 04, 05 | Implemented |
 | 10 | [SAM component routing](PRD-10-sam-component-routing.md) | 06, 07 | Implemented (PRD written after the change, approved 2026-11-03) |
+| 11 | [Analyzed video: tracked parts & possible issues](PRD-11-analyzed-video-annotations.md) | 07, 09, 10 | Implemented (display only, 2026-11-03) |
 
 Each PRD has: **Specs** (functional, from `Argus_Spec.md` v0.9) and a separate **Technical Specs** section (design patterns, retry, configuration, data/API contracts). Sources: [spec](../specs/Argus_Spec.md) · [tech stack](../architecture/Argus_Tech_Stack.md) · [agentic architecture](../architecture/Argus_Agentic_Architecture.md) · [UX mockup](../ux/Argus%20click-through-html/Main.dc.html).

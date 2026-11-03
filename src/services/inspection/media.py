@@ -66,3 +66,21 @@ def dimensions(path: str) -> tuple[int, int] | None:
         return int(w), int(h)
     except Exception:
         return None
+
+
+ANALYSIS_FPS = float(os.environ.get("VIDEO_TRACK_FPS", "5"))
+
+
+def analysis_proxy(path: str, fps: float = ANALYSIS_FPS) -> dict:
+    """A low-frame-rate copy of a video for SAM tracking (billed per frame):
+    `fps` frames per second, long edge <= MAX_EDGE, faststart. Frame n of
+    the proxy is at n / fps seconds of the original, so overlays line up
+    with the original video's playback time."""
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    out = os.path.join(CACHE_DIR, f"{sha256_file(path)}-{fps:g}fps-{MAX_EDGE}.mp4")
+    if not os.path.exists(out):
+        scale = f"scale='if(gt(iw,ih),min({MAX_EDGE},iw),-2)':'if(gt(iw,ih),-2,min({MAX_EDGE},ih))'"
+        _ffmpeg(["-i", path, "-vf", f"fps={fps:g},{scale}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26",
+                 "-an", "-movflags", "+faststart", out])
+    dims = dimensions(out) or (None, None)
+    return {"path": out, "fps": fps, "width": dims[0], "height": dims[1], "duration": _duration(out)}

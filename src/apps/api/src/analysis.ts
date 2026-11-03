@@ -9,7 +9,9 @@
  * (Terminate Now / drain timeout); a cancelled job's signal is aborted so
  * its late result is never written.
  */
-export type JobKind = 'visual' | 'geometry';
+/** visual/geometry produce findings; tracking produces display-only video
+ * annotations and is never part of lifecycle, drain or cancel decisions. */
+export type JobKind = 'visual' | 'geometry' | 'tracking';
 export type JobState = 'queued' | 'running' | 'done' | 'failed' | 'cancelled';
 
 export interface Job {
@@ -28,7 +30,7 @@ export class AnalysisQueue {
   private jobs = new Map<string, Job>();
   private waiters = new Set<() => void>();
 
-  constructor(private limits: Record<JobKind, number> = { visual: 3, geometry: 1 }, private onChange: (job: Job) => void = () => {}) {}
+  constructor(private limits: Record<JobKind, number> = { visual: 3, geometry: 1, tracking: 1 }, private onChange: (job: Job) => void = () => {}) {}
 
   /** Add a job unless one with the same id is queued; a running job with
    *  the same id is marked to run once more after it finishes (coalescing). */
@@ -68,16 +70,16 @@ export class AnalysisQueue {
 
   private notify() { for (const w of [...this.waiters]) w(); }
 
-  /** Jobs still queued or running for a session. */
-  pending(sessionId: string): Job[] {
-    return [...this.jobs.values()].filter(j => j.sessionId === sessionId && (j.state === 'queued' || j.state === 'running'));
+  /** Jobs still queued or running for a session (optionally ignoring kinds). */
+  pending(sessionId: string, exclude: JobKind[] = []): Job[] {
+    return [...this.jobs.values()].filter(j => j.sessionId === sessionId && (j.state === 'queued' || j.state === 'running') && !exclude.includes(j.kind));
   }
 
   jobsFor(sessionId: string): Job[] { return [...this.jobs.values()].filter(j => j.sessionId === sessionId); }
 
   /** Abort everything still pending for a session; returns what was cancelled. */
-  cancel(sessionId: string): Job[] {
-    const cancelled = this.pending(sessionId);
+  cancel(sessionId: string, exclude: JobKind[] = []): Job[] {
+    const cancelled = this.pending(sessionId, exclude);
     for (const job of cancelled) { job.state = 'cancelled'; job.rerun = false; job.controller.abort(); this.onChange(job); }
     this.pump();
     this.notify();
@@ -85,13 +87,13 @@ export class AnalysisQueue {
   }
 
   /** Wait until the session's jobs finish or the deadline passes. */
-  drain(sessionId: string, timeoutMs: number): Promise<{ drained: boolean; remaining: Job[] }> {
+  drain(sessionId: string, timeoutMs: number, exclude: JobKind[] = []): Promise<{ drained: boolean; remaining: Job[] }> {
     return new Promise(resolve => {
       const check = () => {
-        const remaining = this.pending(sessionId);
+        const remaining = this.pending(sessionId, exclude);
         if (!remaining.length) { done(); resolve({ drained: true, remaining: [] }); }
       };
-      const timer = setTimeout(() => { done(); resolve({ drained: false, remaining: this.pending(sessionId) }); }, timeoutMs);
+      const timer = setTimeout(() => { done(); resolve({ drained: false, remaining: this.pending(sessionId, exclude) }); }, timeoutMs);
       const done = () => { clearTimeout(timer); this.waiters.delete(check); };
       this.waiters.add(check);
       check();

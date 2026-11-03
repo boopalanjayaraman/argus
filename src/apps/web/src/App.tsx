@@ -47,8 +47,8 @@ export default function App() {
 
   const loadHome = () => api('/api/v1/inspections').then(j => setInspections(j.inspections || []));
   useEffect(() => { loadHome(); api('/api/v1/cad-models').then(j => setCadModels(j.cad_models || [])); api('/api/v1/instruction-sets').then(setRules); api('/api/v1/reports').then(j => setReports(j.reports || []));
-    const m = location.hash.match(/^#session\/([^/]+)(?:\/(rules|documents|dossier|photo|video|pointcloud|cad))?$/);
-    if (m) api(`/api/v1/inspections/${m[1]}`).then(i => { if (i?.id) { setCurrent(i); setPageState('session'); if (m[2] === 'rules') setTab('Applicable Rules'); else if (m[2] === 'documents') setTab('Documents'); else if (m[2] === 'dossier') setTab('Dossier'); else if (m[2] === 'photo') setViewer({ kind: 'photo', index: 0 }); else if (m[2] === 'video') setViewer({ kind: 'video' }); else if (m[2] === 'pointcloud') setViewer({ kind: 'pointcloud' }); else if (m[2] === 'cad') setViewer({ kind: 'cad' }); } });
+    const m = location.hash.match(/^#session\/([^/]+)(?:\/(rules|documents|dossier|photo|video|video-analyzed|pointcloud|cad))?$/);
+    if (m) api(`/api/v1/inspections/${m[1]}`).then(i => { if (i?.id) { setCurrent(i); setPageState('session'); if (m[2] === 'rules') setTab('Applicable Rules'); else if (m[2] === 'documents') setTab('Documents'); else if (m[2] === 'dossier') setTab('Dossier'); else if (m[2] === 'photo') setViewer({ kind: 'photo', index: 0 }); else if (m[2] === 'video') setViewer({ kind: 'video' }); else if (m[2] === 'video-analyzed') setViewer({ kind: 'video', tab: 'analyzed' }); else if (m[2] === 'pointcloud') setViewer({ kind: 'pointcloud' }); else if (m[2] === 'cad') setViewer({ kind: 'cad' }); } });
   }, []);
   // Live session: server-sent events drive refreshes (EventSource resumes
   // with Last-Event-ID after a drop); a slow poll reconciles if SSE is blocked.
@@ -578,7 +578,7 @@ export default function App() {
         </section></>}
 
       </main></div>)}
-      {viewer && current && <Suspense fallback={null}><ViewerDialog viewer={viewer} sessionId={current.id} photos={photos} videos={videos} pcs={pcs} cadUrl={`/api/v1/cad-models/${current.model_id}/reference.ply?sample=200000`} onClose={() => setViewer(null)} onPhoto={(index) => setViewer({ kind: 'photo', index })} /></Suspense>}
+      {viewer && current && <Suspense fallback={null}><ViewerDialog viewer={viewer} sessionId={current.id} photos={photos} videos={videos} pcs={pcs} cadUrl={`/api/v1/cad-models/${current.model_id}/reference.ply?sample=200000`} onClose={() => setViewer(null)} onPhoto={(index) => setViewer({ kind: 'photo', index })} onShowFindings={() => { setViewer(null); setTab('Applicable Rules'); }} /></Suspense>}
     </div>
   );
 }

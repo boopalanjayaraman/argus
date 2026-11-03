@@ -37,6 +37,12 @@ dialog — expand icon opens the Argus-generated CAD reference cloud
 (`reference.ply?sample=200000`) in the identical interactive viewer
 (orbit/zoom/pan, Reset view, uniform reference colour).
 
+Amendment (2026-11-03, user request): the video viewer has two tabs —
+**Original video** (this player, unchanged) and **Analyzed video** (SAM 3.1
+tracked parts with lightly worded possible-issue labels, display only; see
+[PRD-11](PRD-11-analyzed-video-annotations.md)). Existing views are not
+replaced; new views are added as further tabs.
+
 Out of scope: CAD/scan overlay or registration in one view (needs validated
 registration, PRD-07), point-cloud editing/measurement tools, video segment
 playlist stitching.

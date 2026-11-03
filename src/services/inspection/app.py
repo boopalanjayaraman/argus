@@ -140,6 +140,34 @@ def extract_document(req: DocumentRequest):
         raise HTTPException(status_code=422, detail=f"could not read document: {exc}")
 
 
+class TrackVideoRequest(BaseModel):
+    sessionId: str
+    url: str
+    filename: str = "merged.mp4"
+    family: str
+    type: str
+    rules: list[dict] | None = None
+
+
+@app.post("/track-video")
+async def track_video(req: TrackVideoRequest):
+    """Display-only: track the session's relevant components through the
+    merged video with SAM 3.1, and say which pinned rules each component
+    routes, so the API can attach findings to tracked objects."""
+    import asyncio
+    import visual_routing as vr
+    try:
+        mapping = vr.get_mapping(req.family, req.type)
+    except KeyError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    tasks = wl.build_worklist(req.sessionId, rules=req.rules)["tasks"]
+    components = vr.relevant_components(mapping, tasks)
+    local = resolve_evidence_file({"url": req.url, "filename": req.filename})
+    result = await asyncio.to_thread(meta_adapter.track_video, local, components)
+    result["componentRules"] = {c["id"]: c.get("ruleCodes") or [] for c in components}
+    return result
+
+
 @app.get("/sessions/{session_id}/log")
 def session_log(session_id: str):
     ctx = contexts.get(session_id)

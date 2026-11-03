@@ -19,6 +19,12 @@ const orchestrator = http.createServer((req, res) => {
     } else if (req.url === '/compare-merged') {
       send({ observation: { kind: 'geometry', mergedChunks: json.evidences.length, registration: { status: 'valid', fitness: 1, surfaceCoverageFraction: 0.95, rmsDeviationMm: 2.0, rmseMm: 2.0, p95DeviationMm: 4.1, meanDeviationMm: 1.5 },
         ruleResults: json.rules.map((r: any) => ({ ruleId: r.ruleId, ruleStatus: 'PASS' })) } });
+    } else if (req.url === '/track-video') {
+      mock.calls.push(`track:${json.url}`);
+      send({ status: 'ready', fps: 5, width: 64, height: 48, duration: 1, model: 'sam-3.1',
+        components: [{ id: 'nameplate', prompt: 'metal nameplate', objects: [{ objectId: '0', frames: [[0, 1, 2, 30, 20, 0.9], [4, 3, 2, 32, 20, 0.9]] }] },
+          { id: 'flange_face', prompt: 'flange face', objects: [] }],
+        componentRules: { nameplate: ['2.7', 'NP-001'], flange_face: ['4.3'] } });
     } else if (req.url === '/documents/extract') {
       // Like the real service: download the stored document first.
       fetch(json.url).then(r => r.arrayBuffer()).then(() => send({ pages: 3, orderNumber: 'WO-TEST-001', context: 'Work order WO-TEST-001 size 48 in', rules: [
@@ -373,5 +379,49 @@ describe('server-sent events', () => {
     const rids = [...resumed.matchAll(/^id: (\d+)$/gm)].map(m => Number(m[1]));
     expect(rids.every(n => n > 2)).toBe(true);
     expect(rids[0]).toBe(3);
+  });
+});
+
+import { annotationText, videoLabels } from './server.js';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+describe('analyzed video annotations (display only)', () => {
+  test('labels are lightly worded and come from the finding note', () => {
+    expect(annotationText('FAIL', 'Flange face exposed bare metal, no protector cover visible · screened by muse-spark-1.3 · review: x')).toBe('Possible issue: flange face exposed bare metal, no protector cover visible');
+    expect(annotationText('WARNING', 'Plate visible but 38C/100F text not legible at this distance and the rest of a long note that goes on and on')).toMatch(/^Worth a look: plate visible but .{10,60}…$/);
+  });
+  test('only FAIL/WARNING findings on tracked components get a label', () => {
+    const rules = [
+      { ruleId: '2.7', code: '2.7', title: 'Plate fixed', status: 'FAIL', finding: { reason: 'Plate loose · screened by m' } },
+      { ruleId: 'NP-001', code: 'NP-001', title: 'Plate present', status: 'PASS', finding: { reason: 'ok' } },
+      { ruleId: '4.3', code: '4.3', title: 'Gasket face', status: 'WARNING', finding: { reason: 'scratch' } },
+    ];
+    const tracks = { components: [{ id: 'nameplate', objects: [{ objectId: '0', frames: [[0, 1, 1, 2, 2, 1]] }] }, { id: 'flange_face', objects: [] }], componentRules: { nameplate: ['2.7', 'NP-001'], flange_face: ['4.3'] } };
+    expect(videoLabels(rules, tracks)).toEqual([{ componentId: 'nameplate', ruleId: '2.7', rule: '2.7', title: 'Plate fixed', status: 'FAIL', text: 'Possible issue: plate loose' }]);
+  });
+  test('/complete tracks the merged video; annotations are served with tracks', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'argus-vid-'));
+    const clip = path.join(dir, 'seg.mp4');
+    execFileSync('ffmpeg', ['-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x48:d=1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', clip]);
+    const insp = await newSession('Video Run');
+    const f = new FormData(); f.append('metadata', JSON.stringify({ schemaVersion: '1.0', eventId: 'vid-1', sourceId: 'camera-01', sequence: 1, relativeTimeMs: 0, mediaType: 'video', synthetic: true })); f.append('file', new Blob([fs.readFileSync(clip)]), 'seg.mp4');
+    expect((await app.inject({ method: 'POST', url: `/api/v1/inspections/${insp.id}/video`, payload: f })).statusCode).toBe(202);
+    await app.inject({ method: 'POST', url: `/api/v1/inspections/${insp.id}/complete` });
+    const get = async () => (await app.inject({ method: 'GET', url: `/api/v1/inspections/${insp.id}/video/annotations` })).json();
+    expect(await until(async () => (await get()).status === 'ready', 15000)).toBe(true);
+    const a = await get();
+    expect(a.current).toBe(true);
+    expect(a.fps).toBe(5);
+    expect(a.components.find((c: any) => c.id === 'nameplate').objects[0].frames).toHaveLength(2);
+    expect(Array.isArray(a.labels)).toBe(true);
+    // tracking never holds the session in ANALYZING: once the segment's own
+    // visual analysis is done, the session is ready to close
+    expect(await until(async () => (await app.inject({ method: 'GET', url: `/api/v1/inspections/${insp.id}` })).json().lifecycleStatus === 'READY_TO_CLOSE', 10000)).toBe(true);
+  }, 30000);
+  test('re-running tracking is allowed on a session with video only', async () => {
+    const insp = await newSession('No Video');
+    expect((await app.inject({ method: 'POST', url: `/api/v1/inspections/${insp.id}/track-video` })).statusCode).toBe(409);
   });
 });
