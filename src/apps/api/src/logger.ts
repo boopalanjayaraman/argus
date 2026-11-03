@@ -19,7 +19,14 @@ let gclLog: any = null;
 let gclReady: Promise<void> | null = null;
 
 function initGcl() {
-  if (!PROJECT || gclReady) return gclReady;
+  // GCP_PROJECT_ID alone is not authorisation: without credentials (key file
+  // or Cloud Run/GKE workload identity) the gRPC client crashes the process
+  // asynchronously. Only enable Cloud Logging when an auth path exists.
+  const hasAuthPath = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.K_SERVICE || process.env.GAE_ENV);
+  if (!PROJECT || !hasAuthPath || gclReady) {
+    if (PROJECT && !hasAuthPath) console.log(JSON.stringify({ severity: 'WARNING', message: 'GCP_PROJECT_ID set but no credentials path (GOOGLE_APPLICATION_CREDENTIALS or workload identity); logging to stdout', service: SERVICE }));
+    return gclReady;
+  }
   gclReady = (async () => {
     try {
       const { Logging } = await import('@google-cloud/logging');
@@ -47,7 +54,7 @@ function emit(severity: keyof typeof ORDER, message: string, fields: Fields = {}
 }
 
 export const logger = {
-  get cloudEnabled() { return Boolean(PROJECT); },
+  get cloudEnabled() { return Boolean(PROJECT && (process.env.GOOGLE_APPLICATION_CREDENTIALS || process.env.K_SERVICE || process.env.GAE_ENV)); },
   async init() { await initGcl(); if (PROJECT) emit('info', 'cloud logging enabled', { project: PROJECT, logName: LOG_NAME }); },
   debug: (m: string, f?: Fields) => emit('debug', m, f),
   info: (m: string, f?: Fields) => emit('info', m, f),

@@ -1,7 +1,7 @@
 """Geometry tool: register a laser scan chunk against the CAD reference point cloud.
 
 CAD reference: generated from the given CAD by cad_reference.py
-(sampled surface point cloud, mm, cached under reference-data/), never from
+(sampled surface point cloud, mm, cached under src/reference-data/), never from
 the Simulator. The Simulator's valve_CAD_reference_full_surface.ply remains
 a test fixture only.
 Method: voxel downsample -> FPFH global registration (RANSAC) when far apart,
@@ -19,7 +19,7 @@ def _default_reference() -> str:
     otherwise the generated cache for the default pack is used, and it is
     generated on first use if missing."""
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    cached = os.path.join(root, "reference-data", "cvs6000d-48-demo", "cad", "cad_reference.ply")
+    cached = os.path.join(root, "src/reference-data", "cvs6000d-48-demo", "cad", "cad_reference.ply")
     if not os.path.exists(cached):
         try:
             import cad_reference

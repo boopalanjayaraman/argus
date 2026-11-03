@@ -259,7 +259,7 @@ No login **UI** for private hackathon demo. Protect externally reachable ingesti
 ## 11. Reference data and file structure
 
 ```text
-reference-data/
+src/reference-data/
   cvs6000d-48-demo/
     manifest.json              # valve type, actual file hashes/revisions
     cad/cvs-6000d-48-f1-ac.stp  # unmodified canonical STEP

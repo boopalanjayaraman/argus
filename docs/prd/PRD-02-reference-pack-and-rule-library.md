@@ -4,7 +4,7 @@ Status: Implemented (v1: Fastify+React, local file storage; Mongo/GCS/Meta adapt
 
 ## Specs
 
-- Build `reference-data/cvs6000d-48-demo/`: `manifest.json` (valve type, file hashes/revisions), `cad/` (canonical STEP unmodified + derived `valve.glb` + `features.json` verified anchors), `instructions/` (work-order + manual PDFs), `rules/rules.json` (curated rules with stable ID, printed section, exact quote, page, category, feature(s), modalities, `APPROVED|DEMO_ONLY|REFERENCE_ONLY`, approved threshold only when sourced).
+- Build `src/reference-data/cvs6000d-48-demo/`: `manifest.json` (valve type, file hashes/revisions), `cad/` (canonical STEP unmodified + derived `valve.glb` + `features.json` verified anchors), `instructions/` (work-order + manual PDFs), `rules/rules.json` (curated rules with stable ID, printed section, exact quote, page, category, feature(s), modalities, `APPROVED|DEMO_ONLY|REFERENCE_ONLY`, approved threshold only when sourced).
 - All media/CAD depict the same 48″ CVS 6000D assembly; derived GLB never labelled as original STEP.
 - **CAD registry (decided):** `src/cad_models.json` is the CAD list source. Each entry: `model_id` (opaque connector, e.g. `CVS6000_VALVE`), `display_name`, `revision`, `cad_file` (forward-slash path relative to `src/`), `cad_format`, `sha256`. `model_id` is the join key with the Simulator's `available_simulations.json` — never a filesystem path supplied by a client.
 - Global Inspection Rules page `/inspection-rules`: searchable (title/ID/body/source), valve-type + evidence-type filters, category groups with **computed** counts, expand for full excerpt. Reference-only rules browsable, never counted as auto-evaluated.

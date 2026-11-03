@@ -4,7 +4,7 @@ Status: Implemented (v1: Fastify+React, local file storage; Mongo/GCS/Meta adapt
 
 ## Specs
 
-- Create target layout: `apps/web/` (React+TS+Vite+Tailwind), `apps/api/` (Node 22+TS+Fastify), `services/inspection/` (Python 3.11 FastAPI skeleton), `packages/contracts/` (shared Zod schemas/enums, Argus-internal only), `tests/`, `scripts/`, `.env.example`.
+- Create target layout: `src/apps/web/` (React+TS+Vite+Tailwind), `src/apps/api/` (Node 22+TS+Fastify), `src/services/inspection/` (Python 3.11 FastAPI skeleton), `packages/contracts/` (shared Zod schemas/enums, Argus-internal only), `tests/`, `scripts/`, `.env.example`.
 - Dark operations theme tokens replicated from UX `bundle.css`/`Main.dc.html` (colors, spacing, radii) into Tailwind config — mockup HTML is reference only.
 - Health route `GET /api/v1/health` (optional convenience; Simulator must not require it), web shell with top nav `Argus · Home · Inspection Rules · Reports`, empty states, no login.
 - Both apps run locally with one documented command each; CI runs build + lint + tests.

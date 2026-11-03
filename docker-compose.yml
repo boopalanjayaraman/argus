@@ -7,8 +7,11 @@
 name: argus
 
 services:
+  # Local Mongo is opt-in only: `docker compose --profile local-mongo up mongo`
+  # Default local runs use MongoDB Atlas via MONGODB_URI from .env.
   mongo:
     image: mongo:7
+    profiles: ["local-mongo"]
     volumes:
       - argus-mongo:/data/db
     healthcheck:
@@ -54,7 +57,7 @@ services:
       POINTCLOUD_AGENT_URL: http://pointcloud-agent:8103
       AGENT_JOBS_FILE: data/agent_jobs.json
     volumes:
-      - argus-jobs:/app/services/inspection/data
+      - argus-jobs:/app/src/services/inspection/data
     ports: ["8100:8100"]
     depends_on: [video-agent, image-agent, pointcloud-agent]
 
@@ -62,20 +65,20 @@ services:
     build: { context: ., dockerfile: Dockerfile.api }
     environment:
       PORT: "8000"
-      MONGODB_URI: mongodb://mongo:27017
-      MONGODB_DB: argus
+      MONGODB_URI: ${MONGODB_URI:?Set MONGODB_URI in .env to your MongoDB Atlas connection string}
+      MONGODB_DB: ${MONGODB_DB:-argus}
       GCS_BUCKET: ${GCS_BUCKET:-}
       GCP_PROJECT_ID: ${GCP_PROJECT_ID:-}
       GCP_LOG_NAME: ${GCP_LOG_NAME:-argus}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SERVICE_NAME: argus-api
       INSPECTION_SERVICE_URL: http://orchestrator:8100
+      ARGUS_INGEST_TOKEN: ${ARGUS_INGEST_TOKEN:-}
       META_API_KEY: ${META_API_KEY:-}
     volumes:
       - argus-data:/app/data
     ports: ["8000:8000"]
     depends_on:
-      mongo: { condition: service_healthy }
       orchestrator: { condition: service_started }
 
 volumes:

@@ -6,7 +6,7 @@ SCAN = "/Users/boopalanjayaraman/Documents/Code/meta api cerebral valley/argus/a
 
 def test_reference_generated_from_given_cad(tmp_path):
     out = tmp_path / "cad_reference.ply"
-    repo = pathlib.Path(__file__).resolve().parents[3]
+    repo = pathlib.Path(__file__).resolve().parents[4]
     meta = cad_reference.generate_reference_cloud(str(repo / "src/data/CAD_files/cvs6000_valve.stl"), str(out), num_points=20000)
     assert meta["derived"] is True and meta["units"] == "mm"
     assert meta["points"] == 20000 and out.exists()

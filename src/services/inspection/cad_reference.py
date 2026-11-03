@@ -3,7 +3,7 @@
 Customer/User supplies only the CAD (selected by model_id from
 src/cad_models.json). Argus derives the comparison reference itself:
 uniformly sample the CAD mesh surface into a point cloud (mm), cache it
-under reference-data/<pack>/cad/, and record the source CAD hash so the
+under src/reference-data/<pack>/cad/, and record the source CAD hash so the
 reference is regenerated only when the CAD revision changes.
 
 This is derived design intent, NOT evidence: it is generated from the given
@@ -18,7 +18,7 @@ from pathlib import Path
 
 import open3d as o3d
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_POINTS = int(os.environ.get("CAD_REFERENCE_POINTS", "680000"))
 
 
@@ -64,7 +64,7 @@ def reference_for_model(model_id: str, models_file: str | None = None,
     generating it on first use. This is the user-facing path: CAD given
     (by selection), reference cloud produced by Argus."""
     models_path = Path(models_file) if models_file else REPO_ROOT / "src" / "cad_models.json"
-    root = Path(ref_root) if ref_root else REPO_ROOT / "reference-data" / "cvs6000d-48-demo" / "cad"
+    root = Path(ref_root) if ref_root else REPO_ROOT / "src/reference-data" / "cvs6000d-48-demo" / "cad"
     models = json.loads(models_path.read_text())["cad_models"]
     model = next((m for m in models if m["model_id"] == model_id), None)
     if model is None:

@@ -40,7 +40,8 @@ Argus is a **CAD- and order-specific, progressively updating inspection workbenc
 
 ### Model integration notes
 
-- For new runtime development target Meta's documented **`muse-spark-1.3`**, not a model-generated measurement engine. Supply only relevant approved rule text, actual images/selected clips and existing candidate feature IDs. Parse to a restricted observation schema and validate it in Python.
+- **Tiered, agent-specific routing (updated 2026-11-03, user-approved):** Tier 1 screens *all* video segments and photographs with the fast multimodal model (`META_SCREEN_MODEL`, default `muse-spark-1.3`); VideoAgent never escalates per segment. Tier 2 reviews *only* flagged/high-stakes photographs with the flagship reasoning model (`META_REVIEW_MODEL`, default `muse-wonder` — confirm the exact id and its multimodal/structured-output support on the account at smoke-test time; do not assume a version string). Escalation is deterministic (`meta_adapter.needs_review`: suspected indication, low/unknown certainty, or critical feature — flange faces, nameplate, bonnet, body), never model self-selection. The review is an additional observation; verdicts remain the deterministic rule gate. Point-cloud geometry, rule evaluation, and dossier numbers are never routed to any model.
+- For new runtime development target Meta's documented **`muse-spark-1.3`** for the screening tier, not a model-generated measurement engine. Supply only relevant approved rule text, actual images/selected clips and existing candidate feature IDs. Parse to a restricted observation schema and validate it in Python.
 - Use **`sam-3-1`** via Meta Model API for *specific* target components when ROI localization, mask or tracking adds value. Meta's Responses API and optional `meta_sam_parser` can parse segmentation output. SAM does not by itself detect a crack or measure a tolerance.
 - Deploy **non-contributor/private inference configuration** where applicable for sensitive engineering evidence and confirm account data-handling terms. Store API-call identifiers, model versions and errors for audit.
 - Validate file limits, supported clip duration and structured outputs in a real API smoke test. On failures, leave the affected rule incomplete rather than showing a fabricated pass.
@@ -51,11 +52,11 @@ Sources for implementation verification: [Meta models](https://dev.meta.ai/docs/
 
 ```text
 argus/ (one Git repository)
-  apps/web/                  React frontend
-  apps/api/                  Fastify REST API, SSE, sessions, uploads, documents
-  services/inspection/       Python FastAPI tool/analysis worker
+  src/apps/web/                  React frontend
+  src/apps/api/                  Fastify REST API, SSE, sessions, uploads, documents
+  src/services/inspection/       Python FastAPI tool/analysis worker
   packages/contracts/        API schemas and status enums for internal services
-  reference-data/
+  src/reference-data/
     cvs6000d-48-demo/
       manifest.json
       cad/cvs-6000d-48-f1-ac.stp   # immutable original baseline

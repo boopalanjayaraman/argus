@@ -3,14 +3,14 @@
 FROM python:3.12-slim
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1 libglib2.0-0 libusb-1.0-0 libgomp1 ffmpeg \
+    libgl1 libegl1 libglib2.0-0 libusb-1.0-0 libgomp1 ffmpeg \
     && rm -rf /var/lib/apt/lists/*
-COPY services/inspection/requirements.txt services/inspection/requirements.txt
-RUN pip install --no-cache-dir -r services/inspection/requirements.txt
-COPY services/inspection services/inspection
-COPY reference-data reference-data
+COPY src/services/inspection/requirements.txt src/services/inspection/requirements.txt
+RUN pip install --no-cache-dir -r src/services/inspection/requirements.txt
+COPY src/services/inspection src/services/inspection
+COPY src/reference-data src/reference-data
 COPY src/cad_models.json src/cad_models.json
 COPY src/data src/data
-WORKDIR /app/services/inspection
+WORKDIR /app/src/services/inspection
 EXPOSE 8100 8101 8102 8103
 CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8100"]

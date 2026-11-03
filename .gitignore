@@ -6,3 +6,5 @@ data/dossiers/
 *.tsbuildinfo
 __pycache__/
 .venv/
+.env
+project-argus-gcs-service-account.json

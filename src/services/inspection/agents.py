@@ -53,26 +53,36 @@ class SubAgent:
 
 
 class VideoAgent(SubAgent):
+    """Tier 1 only: fast screening of many segments. Never pays flagship
+    cost per segment; flagged segments surface via `candidate` for a later
+    photo/review pass, not by escalating video itself."""
     name = "video-agent"
     media_types = {"video"}
 
     async def run(self, ctx, evidence, rule):
         ctx.record(self.name, "started", evidence.get("eventId", ""))
-        result = await asyncio.to_thread(meta_adapter.visual_observation, evidence.get("path", ""), rule)
-        obs = {"kind": "visual", "source": "video", "ruleId": rule.get("ruleId"), "lookFor": {"features": rule.get("features", []), "acceptanceQuote": rule.get("quote")}, **result}
+        result = await asyncio.to_thread(meta_adapter.screen_visual, evidence.get("path", ""), rule, "video")
+        obs = {"kind": "visual", "source": "video", "tier": "screen", "ruleId": rule.get("ruleId"), "lookFor": {"features": rule.get("features", []), "acceptanceQuote": rule.get("quote")}, **result}
         ctx.record(self.name, "completed" if result.get("status") != "unavailable" else "unavailable", evidence.get("eventId", ""))
         return obs
 
 
 class ImageAgent(SubAgent):
+    """Tiered: Tier 1 screens every photo; Tier 2 (flagship) reviews only
+    flagged/high-stakes items per meta_adapter.needs_review. The review is
+    an additional observation, never a replacement verdict."""
     name = "image-agent"
     media_types = {"photo"}
 
     async def run(self, ctx, evidence, rule):
         ctx.record(self.name, "started", evidence.get("eventId", ""))
-        result = await asyncio.to_thread(meta_adapter.visual_observation, evidence.get("path", ""), rule)
-        obs = {"kind": "visual", "source": "photo", "ruleId": rule.get("ruleId"), "lookFor": {"features": rule.get("features", []), "acceptanceQuote": rule.get("quote")}, **result}
-        ctx.record(self.name, "completed" if result.get("status") != "unavailable" else "unavailable", evidence.get("eventId", ""))
+        screen = await asyncio.to_thread(meta_adapter.screen_visual, evidence.get("path", ""), rule, "photo")
+        obs = {"kind": "visual", "source": "photo", "tier": "screen", "ruleId": rule.get("ruleId"), "lookFor": {"features": rule.get("features", []), "acceptanceQuote": rule.get("quote")}, **screen}
+        if meta_adapter.needs_review(screen, rule):
+            ctx.record(self.name, "escalated-to-review", evidence.get("eventId", ""))
+            review = await asyncio.to_thread(meta_adapter.review_visual, evidence.get("path", ""), rule, screen)
+            obs["review"] = review
+        ctx.record(self.name, "completed" if screen.get("status") != "unavailable" else "unavailable", evidence.get("eventId", ""))
         return obs
 
 
