@@ -26,6 +26,7 @@ export default function App() {
   const [evidence, setEvidence] = useState<any[]>([]);
   const [sessionRules, setSessionRules] = useState<any>(null);
   const [documents, setDocuments] = useState<any>(null);
+  const [history, setHistory] = useState<any>(null);
   const [tab, setTab] = useState('Live');
   const [homeQ, setHomeQ] = useState('');
   const [homeFilter, setHomeFilter] = useState('All');
@@ -47,8 +48,8 @@ export default function App() {
 
   const loadHome = () => api('/api/v1/inspections').then(j => setInspections(j.inspections || []));
   useEffect(() => { loadHome(); api('/api/v1/cad-models').then(j => setCadModels(j.cad_models || [])); api('/api/v1/instruction-sets').then(setRules); api('/api/v1/reports').then(j => setReports(j.reports || []));
-    const m = location.hash.match(/^#session\/([^/]+)(?:\/(rules|documents|dossier|photo|video|video-analyzed|pointcloud|cad))?$/);
-    if (m) api(`/api/v1/inspections/${m[1]}`).then(i => { if (i?.id) { setCurrent(i); setPageState('session'); if (m[2] === 'rules') setTab('Applicable Rules'); else if (m[2] === 'documents') setTab('Documents'); else if (m[2] === 'dossier') setTab('Dossier'); else if (m[2] === 'photo') setViewer({ kind: 'photo', index: 0 }); else if (m[2] === 'video') setViewer({ kind: 'video' }); else if (m[2] === 'video-analyzed') setViewer({ kind: 'video', tab: 'analyzed' }); else if (m[2] === 'pointcloud') setViewer({ kind: 'pointcloud' }); else if (m[2] === 'cad') setViewer({ kind: 'cad' }); } });
+    const m = location.hash.match(/^#session\/([^/]+)(?:\/(rules|documents|dossier|previous|photo|video|video-analyzed|pointcloud|cad))?$/);
+    if (m) api(`/api/v1/inspections/${m[1]}`).then(i => { if (i?.id) { setCurrent(i); setPageState('session'); if (m[2] === 'rules') setTab('Applicable Rules'); else if (m[2] === 'documents') setTab('Documents'); else if (m[2] === 'dossier') setTab('Dossier'); else if (m[2] === 'previous') setTab('Previous Inspections'); else if (m[2] === 'photo') setViewer({ kind: 'photo', index: 0 }); else if (m[2] === 'video') setViewer({ kind: 'video' }); else if (m[2] === 'video-analyzed') setViewer({ kind: 'video', tab: 'analyzed' }); else if (m[2] === 'pointcloud') setViewer({ kind: 'pointcloud' }); else if (m[2] === 'cad') setViewer({ kind: 'cad' }); } });
   }, []);
   // Live session: server-sent events drive refreshes (EventSource resumes
   // with Last-Event-ID after a drop); a slow poll reconciles if SSE is blocked.
@@ -56,8 +57,8 @@ export default function App() {
     if (page !== 'session' || !current) return;
     const id = current.id; let stopped = false; let timer: any = null;
     const load = async () => {
-      const [i, ev, rs, docs] = await Promise.all([api(`/api/v1/inspections/${id}`), api(`/api/v1/inspections/${id}/evidence`), api(`/api/v1/inspections/${id}/rules`), api(`/api/v1/inspections/${id}/documents`)]);
-      if (stopped) return; setCurrent(i); setEvidence(ev); setSessionRules(rs); setDocuments(docs);
+      const [i, ev, rs, docs, hist] = await Promise.all([api(`/api/v1/inspections/${id}`), api(`/api/v1/inspections/${id}/evidence`), api(`/api/v1/inspections/${id}/rules`), api(`/api/v1/inspections/${id}/documents`), api(`/api/v1/inspections/${id}/history`)]);
+      if (stopped) return; setCurrent(i); setEvidence(ev); setSessionRules(rs); setDocuments(docs); setHistory(hist);
     };
     const soon = () => { clearTimeout(timer); timer = setTimeout(() => { load().catch(() => {}); }, 200); };
     load().catch(() => {});
@@ -88,6 +89,13 @@ export default function App() {
   const closeSession = async (term: boolean) => { if (!confirm(term ? 'Terminate now?' : 'End inspection?')) return; const i = await api(`/api/v1/inspections/${current.id}/${term ? 'terminate' : 'close'}`, { method: 'POST' }); setCurrent(i); api('/api/v1/reports').then(j => setReports(j.reports || [])); loadHome(); };
 
   const filteredInspections = inspections.filter(i => (homeFilter === 'All' || (homeFilter === 'Active' ? !['COMPLETED', 'TERMINATED'].includes(i.lifecycleStatus) : i.lifecycleStatus === homeFilter.toUpperCase())) && (!homeQ || i.name.toLowerCase().includes(homeQ.toLowerCase()) || i.id.includes(homeQ.toLowerCase())));
+  // Inspections of the same work order / asset are listed together, in stage
+  // (creation) order; groups follow their newest inspection. Display only.
+  const homeGroups = (() => {
+    const map = new Map<string, any[]>(); const keys: string[] = [];
+    for (const i of filteredInspections) { const k = i.groupKey || `solo:${i.id}`; if (!map.has(k)) { map.set(k, []); keys.push(k); } map.get(k)!.push(i); }
+    return keys.map(k => ({ key: k.startsWith('solo:') ? '' : k, items: map.get(k)!.slice().sort((a: any, b: any) => a.createdAt.localeCompare(b.createdAt)) })).map((g, n) => ({ ...g, key: g.key || `solo-${n}` }));
+  })();
   const filteredReports = reports.filter(r => (repFilter === 'All' || r.outcome === repFilter.toUpperCase()) && (!repQ || (r.name || '').toLowerCase().includes(repQ.toLowerCase()) || r.sessionId.includes(repQ.toLowerCase())));
   const stageSections = ((rules?.stages || []).find((s: any) => s.name === ruleStage)?.sections || []);
   const visibleSections = stageSections.map((sec: any) => ({ ...sec, rows: (rules?.rules || []).filter((r: any) => r.stage === ruleStage && r.section === sec.name && (!ruleSection || r.section === ruleSection) && (!ruleEv || r.evidence === ruleEv) && (!ruleQ || `${r.code} ${r.title} ${r.text}`.toLowerCase().includes(ruleQ.toLowerCase()))) })).filter((s: any) => s.rows.length);
@@ -218,7 +226,7 @@ export default function App() {
             </>}
           </div>
           <div className="ar-tabs" role="tablist" aria-label="Inspection sections">
-            {[closed ? 'Inspection' : 'Live', 'Applicable Rules', 'Documents'].map((l: string) => <button key={l} type="button" className="ar-tab" role="tab" aria-selected={tab === l || (l !== 'Applicable Rules' && l !== 'Documents' && tab === 'Live')} onClick={() => setTab(l === 'Applicable Rules' || l === 'Documents' ? l : 'Live')}>{l} <b>{l === 'Applicable Rules' ? (sessionRules?.rules || []).filter((r: any) => r.status !== 'NOT_APPLICABLE').length : l === 'Documents' ? (documents?.total ?? evidence.length) : ''}</b></button>)}
+            {[closed ? 'Inspection' : 'Live', 'Applicable Rules', 'Documents', ...(history?.previous?.length ? ['Previous Inspections'] : [])].map((l: string) => <button key={l} type="button" className="ar-tab" role="tab" aria-selected={tab === l || ((l === 'Live' || l === 'Inspection') && tab === 'Live')} onClick={() => setTab(l === 'Inspection' ? 'Live' : l)}>{l} <b>{l === 'Applicable Rules' ? (sessionRules?.rules || []).filter((r: any) => r.status !== 'NOT_APPLICABLE').length : l === 'Documents' ? (documents?.total ?? evidence.length) : l === 'Previous Inspections' ? history.previous.length : ''}</b></button>)}
             {closed && <button type="button" className="ar-tab" role="tab" aria-selected={tab === 'Dossier'} onClick={() => setTab('Dossier')}>Dossier</button>}
           </div>
         </div>
@@ -273,6 +281,35 @@ export default function App() {
               </div>
             </aside>
           </div>
+        </main></div>
+        : tab === 'Previous Inspections' && history?.previous?.length ? <div className="ar-scroll"><main className="ar-page" style={{ paddingTop: 20, gap: 20 }}>
+          <div className="ar-note">Earlier inspections of work order <b>{history.orderNumber}</b>{history.assetId ? <> · asset <b>{history.assetId}</b></> : null}. Shown for reference only: they never change this inspection's results.</div>
+          <section className="ar-card" aria-label="Earlier inspections of this order" style={{ overflow: 'hidden' }}>
+            <div className="ar-rows"><div style={{ minWidth: 760 }}>
+              <div className="ar-rowhead" style={{ gridTemplateColumns: '80px minmax(220px,2fr) 150px 112px 104px 90px' }}><span>Stage</span><span>Inspection</span><span>Started</span><span>Session</span><span>Outcome</span><span></span></div>
+              {[...history.previous, { ...current, stageLabel: current.stageLabel, isCurrent: true }].map((p: any, k: number) => <div key={p.id} className="ar-row static" style={{ gridTemplateColumns: '80px minmax(220px,2fr) 150px 112px 104px 90px' }}>
+                <span className="ar-mono ar-micro">Stage {k + 1}</span>
+                <span style={{ minWidth: 0 }}><span className="ar-h3" style={{ display: 'block' }}>{p.name}{p.isCurrent ? ' (this inspection)' : ''}</span><span className="ar-micro">{p.stageLabel}</span></span>
+                <span className="ar-small">{fmtDate(p.createdAt)}</span>
+                <span><span className={statusClass(p.lifecycleStatus)}>{titleCase(p.lifecycleStatus)}</span></span>
+                <span><span className={outcomeClass(p.outcome)}>{titleCase(p.outcome)}</span></span>
+                <span>{!p.isCurrent && <button type="button" className="ar-btn ghost sm" onClick={async () => { const i = await api(`/api/v1/inspections/${p.id}`); if (i?.id) { setCurrent(i); setTab('Live'); } }}>Open</button>}</span>
+              </div>)}
+            </div></div>
+          </section>
+          <section className="ar-card" aria-label="Rule results across stages" style={{ overflow: 'hidden' }}>
+            <div className="ar-bar" style={{ padding: '16px 20px 8px' }}><h2 className="ar-h3">Rule results across stages</h2><span className="ar-micro">Rules with a result in an earlier inspection</span></div>
+            <div className="ar-rows"><div style={{ minWidth: 760 }}>
+              <div className="ar-rowhead" style={{ gridTemplateColumns: `80px minmax(200px,1fr) repeat(${history.previous.length + 1}, 150px)` }}><span>Rule</span><span>Title</span>{history.previous.map((p: any, k: number) => <span key={p.id}>Stage {k + 1}</span>)}<span>Stage {history.previous.length + 1} (this)</span></div>
+              {history.rules.map((r: any) => <div key={r.ruleId} className="ar-row static" style={{ gridTemplateColumns: `80px minmax(200px,1fr) repeat(${history.previous.length + 1}, 150px)`, alignItems: 'start' }}>
+                <span className="ar-mono ar-micro" style={{ color: 'var(--accent)' }}>{r.code}</span>
+                <span className="ar-small">{r.title}</span>
+                {r.previous.map((p: any) => <span key={p.sessionId} title={p.reason || ''}><span className={p.status === 'NOT_IN_SCOPE' ? 'ar-badge' : badgeFor(p.status)}>{p.status === 'NOT_IN_SCOPE' ? 'Not in scope' : statusLabel(p.status)}</span></span>)}
+                <span><span className={badgeFor(r.current)}>{statusLabel(r.current)}</span></span>
+              </div>)}
+              {!history.rules.length && <div className="ar-empty"><strong>No earlier results yet</strong><span>The earlier inspections have no evaluated rules.</span></div>}
+            </div></div>
+          </section>
         </main></div>
         : tab === 'Documents' ? <div className="ar-scroll"><main className="ar-page" style={{ paddingTop: 20 }}>
           <div className="ar-bar">
@@ -515,18 +552,20 @@ export default function App() {
             </div>
             <div className="ar-rows"><div style={{ minWidth: 780 }}>
               <div className="ar-rowhead" style={{ gridTemplateColumns: 'minmax(200px,2fr) 150px 112px 104px minmax(150px,1.3fr) 16px' }}><span>Inspection</span><span>Started</span><span>Session</span><span>Outcome</span><span>Findings</span><span></span></div>
-              {filteredInspections.map(i => {
+              {homeGroups.map(g => <div key={g.key}>
+                {g.items.length > 1 && <div className="ar-row static" style={{ gridTemplateColumns: '1fr', minHeight: 40, background: 'var(--surface-2)' }}><span className="ar-micro">Work order <b className="ar-mono">{g.key}</b> · {g.items.length} inspections of the same equipment, in stage order</span></div>}
+                {g.items.map((i: any, k: number) => {
                 const f = i.findings || { pass: 0, warning: 0, fail: 0, insufficient: 0, unchecked: 0, total: 0 };
                 const seg = [[f.pass, '#4BE0A0'], [f.warning, '#FFC554'], [f.fail, '#FF7468'], [f.insufficient, '#7AB8FF'], [f.unchecked, '#3A4152']].filter(([n]: any) => n > 0);
-                return <button key={i.id} type="button" className="ar-row" style={{ gridTemplateColumns: 'minmax(200px,2fr) 150px 112px 104px minmax(150px,1.3fr) 16px' }} onClick={() => { setCurrent(i); setPage('session'); }}>
-                  <span style={{ minWidth: 0 }}><span className="ar-h3" style={{ display: 'block' }}>{i.name}</span><span className="ar-mono ar-micro">{i.id}</span></span>
+                return <button key={i.id} type="button" className="ar-row" style={{ gridTemplateColumns: 'minmax(200px,2fr) 150px 112px 104px minmax(150px,1.3fr) 16px', paddingLeft: g.items.length > 1 ? 36 : undefined }} onClick={() => { setCurrent(i); setPage('session'); }}>
+                  <span style={{ minWidth: 0 }}><span className="ar-h3" style={{ display: 'block' }}>{i.name}</span><span className="ar-mono ar-micro">{g.items.length > 1 ? `Stage ${k + 1} · ` : ''}{i.id}{g.items.length === 1 && i.groupKey ? ` · ${i.groupKey}` : ''}</span></span>
                   <span className="ar-small">{fmtDate(i.createdAt)}</span>
                   <span><span className={statusClass(i.lifecycleStatus)}>{titleCase(i.lifecycleStatus)}</span></span>
                   <span><span className={outcomeClass(i.outcome)}>{titleCase(i.outcome)}</span></span>
                   <span style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>{f.total ? <><span className="ar-minibar">{seg.map(([n, c]: any, k: number) => <span key={k} style={{ flex: `${n} 1 0`, background: c }} />)}</span><span className="ar-micro">{[f.pass && `${f.pass} Pass`, f.warning && `${f.warning} Warning`, f.fail && `${f.fail} Fail`, f.insufficient && `${f.insufficient} Insufficient`, f.unchecked && `${f.unchecked} Unchecked`].filter(Boolean).join(' · ')}</span></> : <span className="ar-micro">No findings yet</span>}</span>
                   <svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true" style={{ color: '#8D93A8' }}><path d="m9 5 7 7-7 7V5Z" /></svg>
                 </button>;
-              })}
+              })}</div>)}
             </div></div>
             {!filteredInspections.length && (inspections.length ? <div className="ar-empty"><strong>No inspections match</strong><span>Try another name or clear the filter.</span></div> : <div className="ar-empty"><strong>No inspections to display</strong><span>Create one using Start inspection to get started.</span></div>)}
           </section>

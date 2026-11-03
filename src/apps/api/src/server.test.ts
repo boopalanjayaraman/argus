@@ -426,3 +426,34 @@ describe('analyzed video annotations (display only)', () => {
     expect((await app.inject({ method: 'POST', url: `/api/v1/inspections/${insp.id}/track-video` })).statusCode).toBe(409);
   });
 });
+
+import { assetIdFrom, groupKeyOf } from './server.js';
+describe('grouping inspections by work order (display only)', () => {
+  test('asset id from the order text; group key = order + asset', () => {
+    expect(assetIdFrom('Assembly identifier CVS48-AC-DEMO-002 Order priority Demonstration')).toBe('CVS48-AC-DEMO-002');
+    expect(assetIdFrom('Serial No: C-1234-5.6 Year 2024')).toBe('C-1234-5.6');
+    expect(assetIdFrom('nothing here')).toBeNull();
+    expect(groupKeyOf('WO-1', 'A-2')).toBe('WO-1 / A-2');
+    expect(groupKeyOf('WO-1', null)).toBe('WO-1');
+    expect(groupKeyOf(null, 'A-2')).toBeNull();
+  });
+  test('two inspections of the same order are grouped; history shows earlier ones only', async () => {
+    const orderForm = (name: string, model: string) => { const f = new FormData(); f.append('name', name); f.append('model_id', model); f.append('file', new Blob([Buffer.from('%PDF-1.4 fake')], { type: 'application/pdf' }), 'wo.pdf'); return f; };
+    const first = (await app.inject({ method: 'POST', url: '/api/v1/inspections', payload: orderForm('Stage build', 'CVS6000_VALVE') })).json();
+    await new Promise(r => setTimeout(r, 5));
+    const second = (await app.inject({ method: 'POST', url: '/api/v1/inspections', payload: orderForm('Stage final', 'CVS3000_VALVE') })).json();
+    const loner = await newSession('No order');
+    const list = (await app.inject({ method: 'GET', url: '/api/v1/inspections' })).json().inspections;
+    const g1 = list.find((x: any) => x.id === first.id), g2 = list.find((x: any) => x.id === second.id), g3 = list.find((x: any) => x.id === loner.id);
+    expect(g1.groupKey).toBe('WO-TEST-001');
+    expect(g2.groupKey).toBe(g1.groupKey);
+    expect(g3.groupKey).toBeNull();
+    const h2 = (await app.inject({ method: 'GET', url: `/api/v1/inspections/${second.id}/history` })).json();
+    expect(h2.previous.map((p: any) => p.id)).toContain(first.id);
+    expect(h2.previous.map((p: any) => p.id)).not.toContain(second.id);
+    const h1 = (await app.inject({ method: 'GET', url: `/api/v1/inspections/${first.id}/history` })).json();
+    expect(h1.previous.map((p: any) => p.id)).not.toContain(second.id); // a later inspection is never "previous"
+    const h3 = (await app.inject({ method: 'GET', url: `/api/v1/inspections/${loner.id}/history` })).json();
+    expect(h3).toMatchObject({ groupKey: null, previous: [], rules: [] });
+  });
+});

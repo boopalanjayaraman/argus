@@ -1,6 +1,6 @@
 # Argus — Folder Structure (as of 03 Nov 2026)
 
-Repo: `argus-code/argus` · Main product repo. Status: implemented (PRD-01…10); runs locally (`npm start` + `scripts/run_inspection.sh`) or as six containers (`docker compose up --build`).
+Repo: `argus-code/argus` · Main product repo. Status: implemented (PRD-01…12); runs locally (`npm start` + `scripts/run_inspection.sh`) or as six containers (`docker compose up --build`).
 
 ## Current tree
 
@@ -19,6 +19,7 @@ argus/
 │   ├── product_pitch.md
 │   ├── folder-structure.md           # This file
 │   ├── notes-2026-11-02-cycle-1.md   # Gap register + cycle log
+│   ├── deployment/GCP_Deployment.md  # Google Cloud Run deployment guide
 │   ├── specs/Argus_Spec.md           # Feature spec v0.9 (normative; dated amendments)
 │   ├── architecture/
 │   │   ├── Argus_Agentic_Architecture.md   # v1.0: orchestrator + sub-agents, one deterministic gate

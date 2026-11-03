@@ -24,7 +24,10 @@ if (!process.env.VITEST) try {
 } catch {}
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const DATA = process.env.ARGUS_DATA_DIR || path.join(root, 'data');
-const DB_FILE = path.join(DATA, 'db.json');
+// Working copy of the store. On Cloud Run DATA can be a Cloud Storage FUSE
+// mount (evidence, documents, dossiers) while this file stays on local disk;
+// MongoDB is the source of truth at startup when configured.
+const DB_FILE = process.env.ARGUS_DB_FILE || path.join(DATA, 'db.json');
 const PORT = Number(process.env.PORT || 8000);
 fs.mkdirSync(path.join(DATA, 'evidence'), { recursive: true });
 
@@ -210,6 +213,19 @@ export function geometryReason(rule: any, status: string, reg: any): string {
   return `${status === 'PASS' ? 'Within' : status === 'FAIL' ? 'Outside' : 'Not decidable:'} approved scan limits · ${conds.map(fmt).join(' · ')} · merged scan of ${reg?.mergedChunks ?? '?'} chunks vs CAD`;
 }
 
+/** Asset identifier printed in an order document (assembly ID, serial or
+ * tag number), read from the extracted order text. */
+export function assetIdFrom(text: string): string | null {
+  const m = String(text || '').match(/(?:assembly identifier|assembly id|serial (?:no\.?|number)|tag (?:no\.?|number)|asset (?:id|number))\s*:?\s*([A-Z0-9][A-Z0-9\-\/.]{3,})/i);
+  return m ? m[1].replace(/[.]+$/, '') : null;
+}
+
+/** Inspections of the same equipment: same order number and, when the
+ * order prints one, the same assembly/serial ID. No order -> no group. */
+export function groupKeyOf(orderNumber: string | null, assetId: string | null): string | null {
+  return orderNumber ? `${orderNumber}${assetId ? ` / ${assetId}` : ''}` : null;
+}
+
 /** Short, lightly worded label for a finding drawn on the analyzed video:
  * the model's own observation, trimmed, never a verdict. */
 export function annotationText(status: string, reason: string): string {
@@ -318,6 +334,15 @@ export async function buildServer() {
 
   const getInsp = (id: string) => db.inspections.find((i: any) => i.id === id);
   const writable = (insp: any) => !!insp && !CLOSED.includes(insp.lifecycleStatus);
+  /** Order grouping derived from the pinned order document (works for
+   * inspections created before grouping existed). Display only. */
+  function group(insp: any) {
+    const order = snapshotFor(insp).orderDocument;
+    if (!order) return { orderNumber: null, assetId: null, groupKey: null };
+    const doc = db.documents.find(d => d.documentId === order.documentId);
+    const assetId = assetIdFrom(doc?.extraction?.context || '');
+    return { orderNumber: order.orderNumber || null, assetId, groupKey: groupKeyOf(order.orderNumber || null, assetId) };
+  }
   const fileUrl = (insp: any, ev: any) => `${EVIDENCE_BASE}/api/v1/inspections/${insp.id}/evidence/${ev.evidenceId}/file`;
 
   /** Lifecycle from facts: evidence received, jobs pending, producer done.
@@ -337,6 +362,8 @@ export async function buildServer() {
     const sts = applicable.map((r: any) => r.status);
     const cc = (s: string) => sts.filter((x: string) => x === s).length;
     insp.findings = { pass: cc('PASS'), warning: cc('WARNING'), fail: cc('FAIL'), insufficient: cc('INSUFFICIENT_EVIDENCE'), unchecked: cc('NOT_INSPECTED'), total: sts.length };
+    Object.assign(insp, group(insp));
+    insp.stageLabel = modelFor(insp.model_id)?.display_name || insp.model_id;
     insp.analysis = { pending: queue.pending(insp.id, DISPLAY_ONLY).length, done: ev.filter(e => e.processingStatus === 'done').length };
   }
 
@@ -689,6 +716,22 @@ export async function buildServer() {
         .send(fs.createReadStream(file, { start: range.start, end: range.end }));
     }
     return reply.header('Content-Length', size).send(fs.createReadStream(file));
+  });
+  /** Earlier inspections of the same order / asset, and how each rule
+   * stood in them. Display only: never changes this inspection's results. */
+  app.get('/api/v1/inspections/:id/history', async (req: any, reply) => {
+    const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
+    const g = group(i);
+    if (!g.groupKey) return { ...g, previous: [], rules: [] };
+    const previous = db.inspections.filter(x => x.id !== i.id && x.createdAt < i.createdAt && group(x).groupKey === g.groupKey)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    previous.forEach(refresh);
+    const prevRules = new Map(previous.map(p => [p.id, new Map(sessionRules(p).map((r: any) => [r.ruleId, r]))]));
+    const rules = sessionRules(i).filter((r: any) => r.status !== 'NOT_APPLICABLE').map((r: any) => ({
+      ruleId: r.ruleId, code: r.code || r.ruleId, title: r.title, section: r.section, current: r.status,
+      previous: previous.map(p => { const pr: any = prevRules.get(p.id)?.get(r.ruleId); return { sessionId: p.id, status: pr ? pr.status : 'NOT_IN_SCOPE', reason: pr?.finding?.reason || null }; }),
+    })).filter((r: any) => r.previous.some((p: any) => !['NOT_INSPECTED', 'NOT_IN_SCOPE', 'NOT_APPLICABLE'].includes(p.status)));
+    return { ...g, previous: previous.map(p => ({ id: p.id, name: p.name, stageLabel: modelFor(p.model_id)?.display_name || p.model_id, createdAt: p.createdAt, closedAt: p.closedAt || null, lifecycleStatus: p.lifecycleStatus, outcome: p.outcome, findings: p.findings })), rules };
   });
   app.post('/api/v1/inspections/:id/track-video', async (req: any, reply) => {
     const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
