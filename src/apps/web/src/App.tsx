@@ -180,14 +180,14 @@ export default function App() {
             </>}
           </div>
           <div className="ar-tabs" role="tablist" aria-label="Inspection sections">
-            {[closed ? 'Inspection' : 'Live', 'Applicable Rules', 'Documents'].map((l: string) => <button key={l} type="button" className="ar-tab" role="tab" aria-selected={tab === l || (l !== 'Applicable Rules' && l !== 'Documents' && tab === 'Live')} onClick={() => setTab(l === 'Applicable Rules' || l === 'Documents' ? l : 'Live')}>{l} <b>{l === 'Applicable Rules' ? (sessionRules?.rules || []).length : l === 'Documents' ? (documents?.total ?? evidence.length) : ''}</b></button>)}
+            {[closed ? 'Inspection' : 'Live', 'Applicable Rules', 'Documents'].map((l: string) => <button key={l} type="button" className="ar-tab" role="tab" aria-selected={tab === l || (l !== 'Applicable Rules' && l !== 'Documents' && tab === 'Live')} onClick={() => setTab(l === 'Applicable Rules' || l === 'Documents' ? l : 'Live')}>{l} <b>{l === 'Applicable Rules' ? (sessionRules?.rules || []).filter((r: any) => r.applicability !== 'REFERENCE_ONLY').length : l === 'Documents' ? (documents?.total ?? evidence.length) : ''}</b></button>)}
             {closed && <button type="button" className="ar-tab" role="tab" aria-selected={tab === 'Dossier'} onClick={() => setTab('Dossier')}>Dossier</button>}
           </div>
         </div>
 
         {tab === 'Applicable Rules' ? <div className="ar-scroll"><main className="ar-page" style={{ paddingTop: 20, gap: 20 }}>
           <section className="ar-funnel" aria-label="How rules were selected">
-            {[{ n: sessionRules?.cascade?.library ?? '—', k: 'Rule library', sub: 'All inspection rules', final: 'false' }, { n: sessionRules?.cascade?.valveType ?? '—', k: 'Match valve type', sub: cadModels.find((m: any) => m.model_id === current.model_id)?.display_name || current.model_id, final: 'false' }, { n: totalRules, k: 'Baseline for this valve', sub: 'No specification uploaded', final: 'true' }].map((f: any) => <div key={f.k} className="ar-funnel-step" data-final={f.final}><span className="ar-funnel-n">{f.n}</span><span style={{ minWidth: 0 }}><span className="ar-h3" style={{ display: 'block' }}>{f.k}</span><span className="ar-micro" style={{ overflowWrap: 'anywhere' }}>{f.sub}</span></span></div>)}
+            {[{ n: sessionRules?.cascade?.library ?? '—', k: 'Rule library', sub: 'All inspection rules', final: 'false' }, { n: sessionRules?.cascade?.applicable ?? sessionRules?.cascade?.valveType ?? '—', k: 'Applicable to this valve', sub: cadModels.find((m: any) => m.model_id === current.model_id)?.display_name || current.model_id, final: 'false' }, { n: totalRules, k: 'Baseline for this valve', sub: 'SAM routes a subset per photo/video', final: 'true' }].map((f: any) => <div key={f.k} className="ar-funnel-step" data-final={f.final}><span className="ar-funnel-n">{f.n}</span><span style={{ minWidth: 0 }}><span className="ar-h3" style={{ display: 'block' }}>{f.k}</span><span className="ar-micro" style={{ overflowWrap: 'anywhere' }}>{f.sub}</span></span></div>)}
           </section>
           <div className="ar-split" style={{ gap: 20 }}>
             <section className="ar-grow" aria-label="Applicable rules" style={{ flexBasis: 640 }}>
@@ -222,11 +222,13 @@ export default function App() {
                 <label htmlFor="ins-spec" className="ar-drop"><svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" /></svg><span><strong>Upload specification</strong><span className="ar-small">Adds rules that compare against order values</span></span></label>
                 <input id="ins-spec" className="ar-sr" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" />
               </>}
-              {!!leftOut.length && <div className="ar-note">{leftOut.map((r: any) => `${r.title} (${r.section})`).join(', ')} {leftOut.length === 1 ? 'needs' : 'need'} records that are not visual evidence, so {leftOut.length === 1 ? 'it is' : 'they are'} left out until those records are uploaded.</div>}
+              {!!leftOut.length && <div className="ar-note">{leftOut.length} library rules need measurement, functional-test or work-order records, so they are left out until those records are uploaded.</div>}
               <div>
                 <div className="ar-label" style={{ marginBottom: 6 }}>Left out of this inspection</div>
                 <ul style={{ display: 'flex', flexDirection: 'column', gap: 6, color: 'var(--text-2)', fontSize: 13 }}>
-                  {leftOut.map((r: any) => <li key={r.ruleId}>{r.title}: not evaluated from visual evidence.</li>)}
+                  <li>Measurement rules: need recorded measurements, not photographs.</li>
+                  <li>Functional-test rules: recorded on the test certificate.</li>
+                  <li>Work-order rules: need the customer specification or purchase order.</li>
                   <li>Rules for other valve types and end connections: filtered by the pinned CAD model.</li>
                 </ul>
               </div>

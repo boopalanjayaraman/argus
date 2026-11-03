@@ -184,8 +184,31 @@ export function aggregateOutcome(statuses: string[], terminated = false): string
   if (app.includes('WARNING')) return 'WARNING';
   return 'PASS';
 }
+
+const EVIDENCE_MODALITIES: Record<string, string[]> = {
+  'Photo or video': ['photo', 'video'], '3D scan': ['pointcloud'],
+  'Measurement': [], 'Functional test': [], 'Work order record': []
+};
+
+/** Session-applicable rules come from the full Inspection Rules library
+ * (src/inspection_rules), not the 5-rule demo pack: rules whose evidence
+ * can be produced in a visual session are applicable; measurement,
+ * functional-test and work-order rules wait for those records. */
+export function librarySessionRules(): any[] {
+  return loadInspectionRules().rules.map((r: any) => {
+    const modalities = EVIDENCE_MODALITIES[r.evidence] || [];
+    return {
+      ruleId: r.code, section: r.code, title: r.title,
+      category: r.section, stage: r.stage,
+      quote: r.text, source: `${r.source} (${r.document})`, reference: r.reference || '',
+      features: [] as string[], modalities,
+      applicability: modalities.length ? 'APPROVED' : 'REFERENCE_ONLY'
+    };
+  });
+}
+
 function sessionRules(insp: any) {
-  return rulePack.rules.map((r: Rule) => {
+  return librarySessionRules().map((r: Rule) => {
     const f = db.findings.filter((x: any) => x.sessionId === insp.id && x.ruleId === r.ruleId).sort((a: any, b: any) => b.revision - a.revision)[0];
     return { ...r, status: f ? f.ruleStatus : (r.applicability === 'REFERENCE_ONLY' ? 'NOT_APPLICABLE' : 'NOT_INSPECTED'), finding: f || null };
   });
@@ -195,9 +218,12 @@ function refresh(insp: any) {
   if (insp.lifecycleStatus === 'WAITING' && ev.length) insp.lifecycleStatus = 'RECEIVING';
   else if (!['COMPLETED', 'TERMINATED', 'FINALIZING'].includes(insp.lifecycleStatus) && ev.length > 1 && !insp.producerComplete) insp.lifecycleStatus = 'ANALYZING';
   else if (insp.producerComplete && insp.lifecycleStatus === 'ANALYZING') insp.lifecycleStatus = 'READY_TO_CLOSE';
-  insp.outcome = ['COMPLETED', 'TERMINATED'].includes(insp.lifecycleStatus) ? insp.outcome : aggregateOutcome(sessionRules(insp).map((r: any) => r.status));
+  // Finding counts are per applicable rule (69 of the 158-rule library),
+  // never per evidence item or per finding revision.
+  const applicable = sessionRules(insp).filter((r: any) => r.applicability !== 'REFERENCE_ONLY');
+  insp.outcome = ['COMPLETED', 'TERMINATED'].includes(insp.lifecycleStatus) ? insp.outcome : aggregateOutcome(applicable.map((r: any) => r.status));
   insp.counts = { evidence: ev.length, video: ev.filter((e: any) => e.mediaType === 'video').length, photo: ev.filter((e: any) => e.mediaType === 'photo').length, pointcloud: ev.filter((e: any) => e.mediaType === 'pointcloud').length };
-  const sts = db.findings.filter((f: any) => f.sessionId === insp.id).map((f: any) => f.ruleStatus);
+  const sts = applicable.map((r: any) => r.status);
   const cc = (s: string) => sts.filter((x: string) => x === s).length;
   insp.findings = { pass: cc('PASS'), warning: cc('WARNING'), fail: cc('FAIL'), insufficient: cc('INSUFFICIENT_EVIDENCE'), unchecked: cc('NOT_INSPECTED'), total: sts.length };
 }
@@ -220,6 +246,38 @@ export function parseRange(header: string | undefined, size: number): { start: n
   return { start, end };
 }
 
+
+
+/** Latest finding per rule for one session (revisions supersede). */
+export function latestFindings(findings: any[], sessionId: string): any[] {
+  const latest = new Map<string, any>();
+  for (const f of findings) {
+    if (f.sessionId !== sessionId) continue;
+    const prev = latest.get(f.ruleId);
+    if (!prev || f.revision > prev.revision) latest.set(f.ruleId, f);
+  }
+  return [...latest.values()];
+}
+
+/** Latest finding status per rule for one session (revisions supersede).
+ * Counts never exceed the session rule count (158 max, 69 applicable). */
+export function latestStatuses(findings: any[], sessionId: string): string[] {
+  return latestFindings(findings, sessionId).map((f: any) => f.ruleStatus);
+}
+
+/** Map an orchestrator observation to a finding verdict, or null to keep
+ * the existing state (unavailable / not inspected never overwrites). */
+export function verdictFromObservation(obs: any): { ruleId: string; status: string; reason: string; evidenceId: string | null } | null {
+  if (!obs?.ruleId || !obs?.ruleStatus) return null;
+  if (['NOT_INSPECTED', 'NOT_APPLICABLE', 'ANALYZING'].includes(obs.ruleStatus)) return null;
+  if (obs.status === 'unavailable' || obs.kind === 'failed') return null;
+  if (obs.kind === 'evidence_needed') return { ruleId: obs.ruleId, status: 'INSUFFICIENT_EVIDENCE', reason: obs.notes || 'Needs evidence beyond this image', evidenceId: obs.evidenceId || null };
+  const parts = [obs.notes || `${obs.kind || 'observation'} (${obs.certainty || 'unknown'})`];
+  if (obs.model) parts.push(`screened by ${obs.model}`);
+  if (obs.review?.notes) parts.push(`review: ${obs.review.notes}`);
+  return { ruleId: obs.ruleId, status: obs.ruleStatus, reason: parts.join(' · '), evidenceId: obs.evidenceId || null };
+}
+
 /** Best (highest-fitness) geometry registration from orchestrator observations. */
 export function pickRegistration(observations: any[]): any | null {
   const regs = (observations || []).filter((o: any) => o?.registration).map((o: any) => ({ ...o.registration, evidenceEventId: o.evidence?.eventId || o.eventId || null }));
@@ -227,15 +285,13 @@ export function pickRegistration(observations: any[]): any | null {
   return regs.sort((a: any, b: any) => (b.fitness || 0) - (a.fitness || 0))[0];
 }
 
-function analyze(insp: any, ev: any) {
-  // Coordinator (mirrors src/services/inspection/coordinator.py gate): evidence receipt alone
-  // creates ANALYZING then INSUFFICIENT_EVIDENCE unless qualified observations exist.
-  for (const r of rulePack.rules) {
-    if (r.applicability === 'REFERENCE_ONLY' || !r.modalities?.includes(ev.mediaType)) continue;
-    const rev = db.findings.filter((f: any) => f.sessionId === insp.id && f.ruleId === r.ruleId).length + 1;
-    db.findings.push({ findingId: `f-${insp.id}-${r.ruleId}`, revision: rev, sessionId: insp.id, ruleId: r.ruleId, ruleStatus: 'INSUFFICIENT_EVIDENCE', featureId: r.features?.[0] ?? null, evidenceIds: [ev.evidenceId], observationIds: [], reason: `Evidence ${ev.eventId} received; qualified observation pending (no validated registration/model observation yet)`, cadAnchor: null, at: new Date().toISOString() });
-    emit(db, insp.id, 'finding.created', { ruleId: r.ruleId, evidenceId: ev.evidenceId });
-  }
+function analyze(_insp: any, _ev: any) {
+  // Evidence receipt alone creates no finding. A rule becomes
+  // INSUFFICIENT_EVIDENCE only when SAM routing selects its component
+  // for this evidence and the rule is critical but needs evidence
+  // outside the image (see visual_routing.select_rules), or when the
+  // deterministic gate cannot decide from a qualified observation.
+  // Rules not routed to an evidence item stay NOT_INSPECTED.
 }
 function dossierHtml(insp: any, partial: boolean) {
   const rules = sessionRules(insp);
@@ -313,8 +369,49 @@ export async function buildServer() {
     }
     emit(db, insp.id, 'geometry.compared', { status: insp.geometry.status }); saveDB(db);
   }
+
+  async function dispatchVisual(insp: any) {
+    const items = db.evidence.filter((e: any) => e.sessionId === insp.id && ['photo', 'video'].includes(e.mediaType));
+    if (!items.length) { insp.visualAnalysis = { status: 'insufficient', reason: 'No photographs or video received', at: new Date().toISOString() }; saveDB(db); return; }
+    insp.visualAnalysis = { status: 'running', items: items.length, photos: items.filter((e: any) => e.mediaType === 'photo').length, videos: items.filter((e: any) => e.mediaType === 'video').length, done: 0, verdicts: 0, at: new Date().toISOString() }; saveDB(db);
+    let applied = 0, failures = 0;
+    // One orchestrator call per evidence item: SAM detects the valve
+    // components in that photo/segment and only the routed subset of
+    // the 69 applicable rules is screened for it (in parallel there).
+    // Findings land progressively; one bad item cannot sink the batch.
+    for (const ev of items) {
+      try {
+        const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 1200000);
+        const resp = await fetch(`${INSPECTION_URL}/analyze-evidence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
+          body: JSON.stringify({ sessionId: insp.id, model_id: insp.model_id, evidences: [{ eventId: ev.eventId, evidenceId: ev.evidenceId, mediaType: ev.mediaType, filename: ev.filename, url: `${EVIDENCE_BASE}/api/v1/inspections/${insp.id}/evidence/${ev.evidenceId}/file` }] }) });
+        clearTimeout(timer);
+        if (!resp.ok) throw new Error(`orchestrator ${resp.status}`);
+        const data: any = await resp.json();
+        for (const obs of data.observations || []) {
+          const v = verdictFromObservation(obs);
+          if (!v) continue;
+          const prev = db.findings.filter((f: any) => f.sessionId === insp.id && f.ruleId === v.ruleId).sort((a: any, b: any) => b.revision - a.revision)[0];
+          // A later evidence item only replaces a verdict when the gate
+          // found more: keep FAIL/WARNING over PASS/INSUFFICIENT.
+          const rank: Record<string, number> = { FAIL: 4, WARNING: 3, PASS: 2, INSUFFICIENT_EVIDENCE: 1 };
+          if (prev && prev.ruleStatus !== 'INSUFFICIENT_EVIDENCE' && (rank[v.status] || 0) < (rank[prev.ruleStatus] || 0)) continue;
+          const evidenceIds = [...new Set([...(prev?.evidenceIds || []), ...(v.evidenceId ? [v.evidenceId] : [])])];
+          db.findings.push({ findingId: prev?.findingId || `f-${insp.id}-${v.ruleId}`, revision: (prev?.revision || 0) + 1, sessionId: insp.id, ruleId: v.ruleId, ruleStatus: v.status, featureId: prev?.featureId ?? null, evidenceIds, observationIds: [], reason: v.reason, cadAnchor: null, at: new Date().toISOString() });
+          applied++;
+        }
+      } catch (e: any) {
+        failures++;
+        logger.info('visual.photo_failed', { sessionId: insp.id, eventId: ev.eventId, reason: String(e?.message || e) });
+      }
+      insp.visualAnalysis = { status: 'running', items: items.length, done: (insp.visualAnalysis.done || 0) + 1, verdicts: applied, at: new Date().toISOString() };
+      saveDB(db);
+    }
+    insp.visualAnalysis = { status: failures === items.length ? 'unavailable' : 'completed', items: items.length, done: items.length, verdicts: applied, failures, at: new Date().toISOString() };
+    logger.info('visual.analyzed', { sessionId: insp.id, verdicts: applied, failures });
+    emit(db, insp.id, 'visual.analyzed', { status: insp.visualAnalysis.status }); saveDB(db);
+  }
   app.get('/api/v1/inspections/:id', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } }); refresh(i); return i; });
-  app.get('/api/v1/inspections/:id/rules', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); return { cascade: { library: rulePack.rules.length, valveType: rulePack.rules.filter((r: any) => r.applicability !== 'REFERENCE_ONLY').length, customerSpec: rulePack.rules.filter((r: any) => r.applicability === 'APPROVED').length }, rules: sessionRules(i), why: `Selected by model_id ${i.model_id} from pinned pack ${rulePack.packId}; customer spec overrides disclosed in session snapshot.` }; });
+  app.get('/api/v1/inspections/:id/rules', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); const sr = sessionRules(i); const applicable = sr.filter((r: any) => r.applicability !== 'REFERENCE_ONLY').length; return { cascade: { library: loadInspectionRules().counts.rules, applicable, valveType: applicable, customerSpec: applicable, referenceOnly: sr.length - applicable }, rules: sr, why: `Selected by model_id ${i.model_id} from the Inspection Rules library: ${applicable} of ${sr.length} rules are applicable to a visual (photo/video) session; the rest need measurement, functional-test or work-order records. Within a session, SAM component routing applies only the routed subset of the ${applicable} to each photo/video.` }; });
   app.get('/api/v1/inspections/:id/evidence', async (req: any) => db.evidence.filter((e: any) => e.sessionId === req.params.id));
 
   const mergedInFlight = new Map<string, Promise<string>>();
@@ -414,8 +511,9 @@ export async function buildServer() {
   app.post('/api/v1/inspections/:id/video', upload('video'));
   app.post('/api/v1/inspections/:id/photos', upload('photo'));
   app.post('/api/v1/inspections/:id/pointcloud', upload('pointcloud'));
-  app.post('/api/v1/inspections/:id/complete', async (req: any, reply) => { if (!ingestAuthorized(req)) return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Valid ingest token required' } }); const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); i.producerComplete = true; if (i.lifecycleStatus === 'RECEIVING') i.lifecycleStatus = 'READY_TO_CLOSE'; emit(db, i.id, 'source.complete', {}); saveDB(db); void runComparison(i); return { ok: true, sessionOpen: true }; });
+  app.post('/api/v1/inspections/:id/complete', async (req: any, reply) => { if (!ingestAuthorized(req)) return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Valid ingest token required' } }); const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); i.producerComplete = true; if (i.lifecycleStatus === 'RECEIVING') i.lifecycleStatus = 'READY_TO_CLOSE'; emit(db, i.id, 'source.complete', {}); saveDB(db); void runComparison(i); void dispatchVisual(i); return { ok: true, sessionOpen: true }; });
   app.post('/api/v1/inspections/:id/compare', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); void runComparison(i); return { ok: true, status: 'running' }; });
+  app.post('/api/v1/inspections/:id/analyze-visual', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); void dispatchVisual(i); return { ok: true, status: 'running' }; });
   const close = (terminated: boolean) => async (req: any, reply: any) => {
     const insp = getInsp(req.params.id); if (!insp) return reply.code(404).send({ error: 'not found' });
     insp.lifecycleStatus = terminated ? 'TERMINATED' : 'COMPLETED'; insp.closedAt = new Date().toISOString();
@@ -430,7 +528,8 @@ export async function buildServer() {
   app.get('/api/v1/reports', async () => ({
     reports: db.dossiers.map((d: any) => {
       const insp = db.inspections.find((i: any) => i.id === d.sessionId);
-      const statuses = db.findings.filter((f: any) => f.sessionId === d.sessionId).map((f: any) => f.ruleStatus);
+      const applicableIds = new Set(librarySessionRules().filter((r: any) => r.applicability !== 'REFERENCE_ONLY').map((r: any) => r.ruleId));
+      const statuses = latestFindings(db.findings, d.sessionId).filter((f: any) => applicableIds.has(f.ruleId)).map((f: any) => f.ruleStatus);
       const c = (s: string) => statuses.filter((x: string) => x === s).length;
       return { ...d, name: insp?.name || d.sessionId, closedAt: d.at, type: d.partial ? 'Partial' : 'Full',
         findings: { pass: c('PASS'), warning: c('WARNING'), fail: c('FAIL'), insufficient: c('INSUFFICIENT_EVIDENCE'), unchecked: c('NOT_INSPECTED'), total: statuses.length } };

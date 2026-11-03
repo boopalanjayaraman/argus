@@ -1,5 +1,6 @@
 import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+import coordinator
 from coordinator import select_tools, evaluate_rule, aggregate_outcome, geometry_gate
 
 RULE = {"ruleId": "WO-R02", "modalities": ["photo", "pointcloud"], "features": ["inlet_flange_face"], "applicability": "APPROVED"}
@@ -27,3 +28,11 @@ def test_geometry_gate():
     assert geometry_gate({"status": "valid", "rmseMm": 0.8, "surfaceCoverageFraction": 0.6}, "mm") == "valid"
     assert geometry_gate({"status": "valid", "rmseMm": 0.8, "surfaceCoverageFraction": 0.6}, None) == "insufficient"
     assert geometry_gate(None, "mm") == "insufficient"
+
+
+def test_absent_component_fails_when_observed():
+    assert evaluate_rule(RULE, [{"kind": "component_absent", "certainty": "observed", "notes": "no fasteners"}]) == "FAIL"
+
+
+def test_absent_component_suspected_is_not_a_fail():
+    assert evaluate_rule(RULE, [{"kind": "component_absent", "certainty": "suspected"}]) != "FAIL"

@@ -105,3 +105,61 @@ describe('merged video helpers', () => {
     expect(parseRange('bytes=2000-', 1000)).toBeNull();
   });
 });
+
+import { verdictFromObservation } from './server.js';
+describe('verdictFromObservation', () => {
+  test('applies a gate verdict with the model note', () => {
+    const v = verdictFromObservation({ ruleId: '2.7', ruleStatus: 'PASS', kind: 'component_present', certainty: 'observed', notes: 'plate fixed', model: 'muse-spark-1.3', evidenceId: 'ev-photo-0001' });
+    expect(v).toMatchObject({ ruleId: '2.7', status: 'PASS', evidenceId: 'ev-photo-0001' });
+    expect(v!.reason).toContain('plate fixed');
+  });
+  test('never overwrites from unavailable or uninspected observations', () => {
+    expect(verdictFromObservation({ ruleId: '2.7', ruleStatus: 'NOT_INSPECTED', status: 'unavailable' })).toBeNull();
+    expect(verdictFromObservation({ ruleId: '2.7', kind: 'failed' })).toBeNull();
+  });
+});
+
+import { latestStatuses, librarySessionRules } from './server.js';
+describe('latestStatuses', () => {
+  test('counts only the latest revision per rule', () => {
+    const findings = [
+      { sessionId: 's1', ruleId: '2.1', revision: 1, ruleStatus: 'INSUFFICIENT_EVIDENCE' },
+      { sessionId: 's1', ruleId: '2.1', revision: 2, ruleStatus: 'INSUFFICIENT_EVIDENCE' },
+      { sessionId: 's1', ruleId: '2.1', revision: 3, ruleStatus: 'PASS' },
+      { sessionId: 's1', ruleId: '2.2', revision: 1, ruleStatus: 'INSUFFICIENT_EVIDENCE' },
+      { sessionId: 's2', ruleId: '2.1', revision: 9, ruleStatus: 'FAIL' }
+    ];
+    expect(latestStatuses(findings, 's1').sort()).toEqual(['INSUFFICIENT_EVIDENCE', 'PASS']);
+  });
+});
+
+describe('applicable rule counts (69 of 158)', () => {
+  test('library has 158 rules, 69 applicable to a visual session', () => {
+    const rules = librarySessionRules();
+    expect(rules).toHaveLength(158);
+    expect(rules.filter((r: any) => r.applicability !== 'REFERENCE_ONLY')).toHaveLength(69);
+  });
+  test('evidence-needed observations become INSUFFICIENT_EVIDENCE findings', () => {
+    const v = verdictFromObservation({ ruleId: '9.5', ruleStatus: 'INSUFFICIENT_EVIDENCE', kind: 'evidence_needed', notes: 'Needs testRecord evidence beyond this photo', evidenceId: 'ev-photo-0001' });
+    expect(v).toMatchObject({ ruleId: '9.5', status: 'INSUFFICIENT_EVIDENCE', evidenceId: 'ev-photo-0001' });
+  });
+  test('uploading evidence alone creates no insufficient findings', async () => {
+    const c = await app.inject({ method: 'POST', url: '/api/v1/inspections', payload: { name: 'Counts Run', model_id: 'CVS6000_VALVE' } });
+    const insp = c.json();
+    for (let n = 1; n <= 3; n++) {
+      const form = new FormData();
+      form.append('metadata', JSON.stringify({ schemaVersion: '1.0', eventId: `img-c${n}`, sourceId: 'camera-photos-01', sequence: n, relativeTimeMs: 0, mediaType: 'photo', synthetic: true }));
+      form.append('file', new Blob([Buffer.from('fake-png')], { type: 'image/png' }), `${n}.png`);
+      const up = await app.inject({ method: 'POST', url: `/api/v1/inspections/${insp.id}/photos`, payload: form });
+      expect(up.statusCode).toBe(202);
+    }
+    const got = (await app.inject({ method: 'GET', url: `/api/v1/inspections/${insp.id}` })).json();
+    expect(got.findings.insufficient).toBe(0);
+    expect(got.findings.total).toBe(69);
+    expect(got.findings.unchecked).toBe(69);
+    const rules = (await app.inject({ method: 'GET', url: `/api/v1/inspections/${insp.id}/rules` })).json();
+    expect(rules.cascade.library).toBe(158);
+    expect(rules.cascade.applicable).toBe(69);
+    expect(rules.rules.filter((r: any) => r.applicability !== 'REFERENCE_ONLY')).toHaveLength(69);
+  });
+});

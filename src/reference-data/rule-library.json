@@ -1,0 +1,2266 @@
+{
+  "packId": "inspection-rules-library",
+  "rules": [
+    {
+      "ruleId": "2.1",
+      "section": "2.1",
+      "title": "Manufacturer name/trademark on body",
+      "category": "Identification and Marking",
+      "stage": "Visual Inspection",
+      "quote": "Legible, present, matches certificate",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 4 / MSS SP-25",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "2.2",
+      "section": "2.2",
+      "title": "Body material designation on body",
+      "category": "Identification and Marking",
+      "stage": "Visual Inspection",
+      "quote": "e.g. WCB, CF8M - matches MTC and PO",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 4 / MSS SP-25",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "2.3",
+      "section": "2.3",
+      "title": "Pressure Class on body",
+      "category": "Identification and Marking",
+      "stage": "Visual Inspection",
+      "quote": "150 / 300 / 600 etc. matches PO",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 4",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "2.4",
+      "section": "2.4",
+      "title": "Nominal Size (NPS) on body",
+      "category": "Identification and Marking",
+      "stage": "Visual Inspection",
+      "quote": "Matches PO and GA drawing",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 4",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "2.5",
+      "section": "2.5",
+      "title": "Heat / Melt number",
+      "category": "Identification and Marking",
+      "stage": "Visual Inspection",
+      "quote": "Traceable to Material Test Certificate",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 4",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "2.6",
+      "section": "2.6",
+      "title": "Flow direction arrow",
+      "category": "Identification and Marking",
+      "stage": "Visual Inspection",
+      "quote": "Present on globe, check, and unidirectional valves",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 / MSS SP-25",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "2.7",
+      "section": "2.7",
+      "title": "Identification plate fixed securely",
+      "category": "Identification and Marking",
+      "stage": "Visual Inspection",
+      "quote": "Not loose, not obscured by paint",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 4 / MSS SP-25",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "2.8",
+      "section": "2.8",
+      "title": "Rating on plate",
+      "category": "Identification and Marking",
+      "stage": "Visual Inspection",
+      "quote": "Pressure-Temp rating at 38°C / 100°F is marked",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "MSS SP-25",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "2.9",
+      "section": "2.9",
+      "title": "Trim material on plate",
+      "category": "Identification and Marking",
+      "stage": "Visual Inspection",
+      "quote": "Matches PO / datasheet",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "MSS SP-25",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "2.10",
+      "section": "2.10",
+      "title": "SPECIAL CLASS / LIMITED CLASS marking",
+      "category": "Identification and Marking",
+      "stage": "Visual Inspection",
+      "quote": "Marked if applicable, matches PO",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 4",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "3.1",
+      "section": "3.1",
+      "title": "Cracks, hot tears, cold shuts",
+      "category": "Pressure-Boundary Castings and Forgings",
+      "stage": "Visual Inspection",
+      "quote": "No crack-type defects allowed",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 5-6 / MSS SP-55",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "3.2",
+      "section": "3.2",
+      "title": "Porosity / shrinkage",
+      "category": "Pressure-Boundary Castings and Forgings",
+      "stage": "Visual Inspection",
+      "quote": "No through-wall porosity. Not beyond agreed MSS SP-55 level",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "MSS SP-55",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "3.3",
+      "section": "3.3",
+      "title": "Sand inclusions, scabs, chaplets",
+      "category": "Pressure-Boundary Castings and Forgings",
+      "stage": "Visual Inspection",
+      "quote": "Not breaking pressure wall or sealing surface",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "MSS SP-55",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "3.4",
+      "section": "3.4",
+      "title": "Wall thickness reduction",
+      "category": "Pressure-Boundary Castings and Forgings",
+      "stage": "Visual Inspection",
+      "quote": "No irregularity reducing wall below B16.34 minimum",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 6",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "3.5",
+      "section": "3.5",
+      "title": "Weld repairs",
+      "category": "Pressure-Boundary Castings and Forgings",
+      "stage": "Visual Inspection",
+      "quote": "Approved, smooth, blended, re-examined. No unapproved repair",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 / MSS SP-55",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "3.6",
+      "section": "3.6",
+      "title": "Forging defects - laps, seams, folds",
+      "category": "Pressure-Boundary Castings and Forgings",
+      "stage": "Visual Inspection",
+      "quote": "No laps, seams, folds, or cracks",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 5",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "4.1",
+      "section": "4.1",
+      "title": "Flange type - RF / FF / RTJ",
+      "category": "Flanged Ends",
+      "stage": "Visual Inspection",
+      "quote": "As per PO and GA drawing",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.5 Para. 6 / B16.47",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "4.2",
+      "section": "4.2",
+      "title": "Gasket face finish",
+      "category": "Flanged Ends",
+      "stage": "Visual Inspection",
+      "quote": "Serrated finish, Ra 3.2 to 6.3 µm (125-250 µin AARH) unless specified otherwise",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.5 Para. 6",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "4.3",
+      "section": "4.3",
+      "title": "Gasket face damage",
+      "category": "Flanged Ends",
+      "stage": "Visual Inspection",
+      "quote": "No radial scratches, nicks, burrs, pitting, or warping",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.5 Para. 6",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "4.4",
+      "section": "4.4",
+      "title": "RTJ groove condition",
+      "category": "Flanged Ends",
+      "stage": "Visual Inspection",
+      "quote": "No dents, scoring, or rust on groove side walls",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.5 Para. 6",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "4.5",
+      "section": "4.5",
+      "title": "Bolt holes",
+      "category": "Flanged Ends",
+      "stage": "Visual Inspection",
+      "quote": "Correct number, dia, PCD. Straddle vertical centreline",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.5 / B16.47",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "4.6",
+      "section": "4.6",
+      "title": "Flange back face",
+      "category": "Flanged Ends",
+      "stage": "Visual Inspection",
+      "quote": "Spot-faced / machined for proper nut bearing",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.5 Para. 6",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "4.7",
+      "section": "4.7",
+      "title": "Face protection",
+      "category": "Flanged Ends",
+      "stage": "Visual Inspection",
+      "quote": "Protector fitted, face not painted",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Delivery Requirement",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "5.1",
+      "section": "5.1",
+      "title": "Bevel angle and root face",
+      "category": "Butt-Weld Ends",
+      "stage": "Visual Inspection",
+      "quote": "Matches mating pipe schedule on drawing",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.25",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "5.2",
+      "section": "5.2",
+      "title": "Bore and alignment",
+      "category": "Butt-Weld Ends",
+      "stage": "Visual Inspection",
+      "quote": "Uniform bore, no excessive misalignment or protrusion",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.25",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "5.3",
+      "section": "5.3",
+      "title": "Weld preparation surface",
+      "category": "Butt-Weld Ends",
+      "stage": "Visual Inspection",
+      "quote": "Smooth, free from cracks, laminations, tears, scale, grease",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.25",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "5.4",
+      "section": "5.4",
+      "title": "End protection",
+      "category": "Butt-Weld Ends",
+      "stage": "Visual Inspection",
+      "quote": "Plastic cap and rust preventive fitted",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Delivery Requirement",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "6.1",
+      "section": "6.1",
+      "title": "NPT thread condition",
+      "category": "Threaded and Socket-Weld Ends",
+      "stage": "Visual Inspection",
+      "quote": "Complete, gauged, no torn/crossed/flattened threads",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.11 / B1.20.1",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "6.2",
+      "section": "6.2",
+      "title": "Socket bore and depth",
+      "category": "Threaded and Socket-Weld Ends",
+      "stage": "Visual Inspection",
+      "quote": "Correct bore/depth, socket face square to bore",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.11",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "6.3",
+      "section": "6.3",
+      "title": "Cracks at thread/socket",
+      "category": "Threaded and Socket-Weld Ends",
+      "stage": "Visual Inspection",
+      "quote": "No cracks at thread root or socket fillet",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.11",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "6.4",
+      "section": "6.4",
+      "title": "End protection",
+      "category": "Threaded and Socket-Weld Ends",
+      "stage": "Visual Inspection",
+      "quote": "Thread / socket protectors fitted",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Delivery Requirement",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "7.1",
+      "section": "7.1",
+      "title": "Body cavity cleanliness",
+      "category": "Internals, Seats and Obturator",
+      "stage": "Visual Inspection",
+      "quote": "No sand, scale, weld spatter, tools, or foreign matter",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Good Practice",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "7.2",
+      "section": "7.2",
+      "title": "Seat ring / sealing faces",
+      "category": "Internals, Seats and Obturator",
+      "stage": "Visual Inspection",
+      "quote": "No scratches, dents, wire-drawing, or lapping damage",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Manufacturer Std / PO",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "7.3",
+      "section": "7.3",
+      "title": "Disc / Wedge / Ball / Plug face",
+      "category": "Internals, Seats and Obturator",
+      "stage": "Visual Inspection",
+      "quote": "Undamaged, smooth, no scoring",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Manufacturer Std / PO",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "7.4",
+      "section": "7.4",
+      "title": "Soft seats / seals",
+      "category": "Internals, Seats and Obturator",
+      "stage": "Visual Inspection",
+      "quote": "Correct material, not cut, extruded, or aged",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "PO / Datasheet",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "7.5",
+      "section": "7.5",
+      "title": "Stem condition",
+      "category": "Internals, Seats and Obturator",
+      "stage": "Visual Inspection",
+      "quote": "Straight, thread undamaged, no scoring in packing area",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Manufacturer Std",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "7.6",
+      "section": "7.6",
+      "title": "Packing, gasket, bolting",
+      "category": "Internals, Seats and Obturator",
+      "stage": "Visual Inspection",
+      "quote": "Correct material, fully fitted, even stud protrusion",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 6",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "7.7",
+      "section": "7.7",
+      "title": "Internal painting",
+      "category": "Internals, Seats and Obturator",
+      "stage": "Visual Inspection",
+      "quote": "No paint inside body, on seats, stem, or gasket faces",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Delivery Requirement",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "8.1",
+      "section": "8.1",
+      "title": "Handwheel / Gear / Actuator fitting",
+      "category": "Assembly and Operability",
+      "stage": "Visual Inspection",
+      "quote": "Correctly fitted, not cracked, closing direction marked",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Manufacturer Std / PO",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "8.2",
+      "section": "8.2",
+      "title": "Full travel operation",
+      "category": "Assembly and Operability",
+      "stage": "Visual Inspection",
+      "quote": "Smooth open-close without binding over full travel",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 / Functional",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "8.3",
+      "section": "8.3",
+      "title": "Position indicator",
+      "category": "Assembly and Operability",
+      "stage": "Visual Inspection",
+      "quote": "Agrees with actual disc/ball position",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Manufacturer Std / PO",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "8.4",
+      "section": "8.4",
+      "title": "Check valve disc movement",
+      "category": "Assembly and Operability",
+      "stage": "Visual Inspection",
+      "quote": "Disc swings freely",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Functional",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "8.5",
+      "section": "8.5",
+      "title": "External bolting tightness",
+      "category": "Assembly and Operability",
+      "stage": "Visual Inspection",
+      "quote": "All bolting tightened, locking arrangements fitted",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 6",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "9.1",
+      "section": "9.1",
+      "title": "Shell (Hydrostatic) test performed",
+      "category": "Pressure Test - Visual Acceptance",
+      "stage": "Visual Inspection",
+      "quote": "At 1.5 x pressure rating at 100°F",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 7",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "9.2",
+      "section": "9.2",
+      "title": "Leakage through body/bonnet",
+      "category": "Pressure Test - Visual Acceptance",
+      "stage": "Visual Inspection",
+      "quote": "**No visible leakage, weeping, or sweating** for hold time",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 7",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "9.3",
+      "section": "9.3",
+      "title": "Leakage at body-bonnet joint",
+      "category": "Pressure Test - Visual Acceptance",
+      "stage": "Visual Inspection",
+      "quote": "No visible leakage",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 7",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "9.4",
+      "section": "9.4",
+      "title": "Permanent distortion",
+      "category": "Pressure Test - Visual Acceptance",
+      "stage": "Visual Inspection",
+      "quote": "No visible permanent distortion after test",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 Para. 7",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "9.5",
+      "section": "9.5",
+      "title": "Seat test (if specified in PO)",
+      "category": "Pressure Test - Visual Acceptance",
+      "stage": "Visual Inspection",
+      "quote": "No visible leakage for soft seat. Within drops/bubbles limit for metal seat",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "API 598 / ISO 5208 / MSS SP-61",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "10.1",
+      "section": "10.1",
+      "title": "Internal dryness",
+      "category": "Condition Before Delivery / Dispatch",
+      "stage": "Visual Inspection",
+      "quote": "Valve drained and dry after hydrotest",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Delivery Requirement",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "10.2",
+      "section": "10.2",
+      "title": "Rust preventive coating",
+      "category": "Condition Before Delivery / Dispatch",
+      "stage": "Visual Inspection",
+      "quote": "Applied on machined, non-painted surfaces",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Delivery Requirement",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "10.3",
+      "section": "10.3",
+      "title": "End protectors / caps",
+      "category": "Condition Before Delivery / Dispatch",
+      "stage": "Visual Inspection",
+      "quote": "Fitted on flanges, bevels, threads, sockets",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.5 / B16.25",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "10.4",
+      "section": "10.4",
+      "title": "Painting",
+      "category": "Condition Before Delivery / Dispatch",
+      "stage": "Visual Inspection",
+      "quote": "Correct primer/shade. No paint on sealing faces, nameplate, stem",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "PO Specification",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "10.5",
+      "section": "10.5",
+      "title": "Shipping position",
+      "category": "Condition Before Delivery / Dispatch",
+      "stage": "Visual Inspection",
+      "quote": "Gate/Globe/Check: Closed, Ball: Open, Butterfly: Slightly Open - unless specified otherwise",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "Manufacturer Std / PO",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "10.6",
+      "section": "10.6",
+      "title": "Documentation match",
+      "category": "Condition Before Delivery / Dispatch",
+      "stage": "Visual Inspection",
+      "quote": "Nameplate, MTC, Test Certificate, and GA drawing correspond to physical valve",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.34 / PO",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "10.7",
+      "section": "10.7",
+      "title": "Face-to-Face dimension type",
+      "category": "Condition Before Delivery / Dispatch",
+      "stage": "Visual Inspection",
+      "quote": "Type conforms to PO. Verify dimensionally if specified",
+      "source": "ASME B16.x - Visual Inspection Checklist for Valves Before Delivery (ASME_B16_Valve_Visual_Inspection_Checklist.md)",
+      "reference": "ASME B16.10",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "assembly-01-torque-01",
+      "section": "assembly-01-torque-01",
+      "title": "Wrench held perpendicular. Steady, slow rotation. Jerky/fast rotation = FAIL if recorded.",
+      "category": "General Torque Procedure",
+      "stage": "Assembly",
+      "quote": "Wrench held perpendicular. Steady, slow rotation. Jerky/fast rotation = FAIL if recorded.",
+      "source": "Assembly - General Torque Procedure (assembly_01_torque_procedure.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-01-torque-02",
+      "section": "assembly-01-torque-02",
+      "title": "Only wrenches with up-to-date calibration stickers. Not evidenced = HOLD.",
+      "category": "General Torque Procedure",
+      "stage": "Assembly",
+      "quote": "Only wrenches with up-to-date calibration stickers. Not evidenced = HOLD.",
+      "source": "Assembly - General Torque Procedure (assembly_01_torque_procedure.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-01-torque-03",
+      "section": "assembly-01-torque-03",
+      "title": "Progressive application: 25%, then 50-75%, then 100%.",
+      "category": "General Torque Procedure",
+      "stage": "Assembly",
+      "quote": "Progressive application: 25%, then 50-75%, then 100%.",
+      "source": "Assembly - General Torque Procedure (assembly_01_torque_procedure.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-01-torque-04",
+      "section": "assembly-01-torque-04",
+      "title": "Values in ( ) = wrench setting with 10:1 torque multiplier.",
+      "category": "General Torque Procedure",
+      "stage": "Assembly",
+      "quote": "Values in ( ) = wrench setting with 10:1 torque multiplier.",
+      "source": "Assembly - General Torque Procedure (assembly_01_torque_procedure.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-01-torque-05",
+      "section": "assembly-01-torque-05",
+      "title": "For torques >1900 Nm, multiplier must be greater than 10:1. Else FAIL.",
+      "category": "General Torque Procedure",
+      "stage": "Assembly",
+      "quote": "For torques >1900 Nm, multiplier must be greater than 10:1. Else FAIL.",
+      "source": "Assembly - General Torque Procedure (assembly_01_torque_procedure.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-01",
+      "section": "assembly-05-sequen-01",
+      "title": "Parts verified vs work order (material, Cv, size, ANSI)",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "Parts verified vs work order (material, Cv, size, ANSI)",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-02",
+      "section": "assembly-05-sequen-02",
+      "title": "body flange in vise",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "body flange in vise",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-03",
+      "section": "assembly-05-sequen-03",
+      "title": "black grease seat threads",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "black grease seat threads",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-04",
+      "section": "assembly-05-sequen-04",
+      "title": "rotate counter-clockwise to align then clockwise",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "rotate counter-clockwise to align then clockwise",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-05",
+      "section": "assembly-05-sequen-05",
+      "title": "seat torqued with correct tool/multiplier per assembly_02",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "seat torqued with correct tool/multiplier per assembly_02",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-06",
+      "section": "assembly-05-sequen-06",
+      "title": "grease gasket area and top of gasket",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "grease gasket area and top of gasket",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-07",
+      "section": "assembly-05-sequen-07",
+      "title": "white grease plug stem at packing, plug fully into bonnet",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "white grease plug stem at packing, plug fully into bonnet",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-08",
+      "section": "assembly-05-sequen-08",
+      "title": "bonnet threaded carefully",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "bonnet threaded carefully",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-09",
+      "section": "assembly-05-sequen-09",
+      "title": "grease studs, cross-wise bonnet torque",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "grease studs, cross-wise bonnet torque",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-10",
+      "section": "assembly-05-sequen-10",
+      "title": "stuffing box snug not over-tightened (record only)",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "stuffing box snug not over-tightened (record only)",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-11",
+      "section": "assembly-05-sequen-11",
+      "title": "stem lock + coupling nuts installed not tightened",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "stem lock + coupling nuts installed not tightened",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-12",
+      "section": "assembly-05-sequen-12",
+      "title": "remove from vise",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "remove from vise",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-13",
+      "section": "assembly-05-sequen-13",
+      "title": "test per inspection files.",
+      "category": "Standard - Sheet 14",
+      "stage": "Assembly",
+      "quote": "test per inspection files.",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-14",
+      "section": "assembly-05-sequen-14",
+      "title": "Plug in vise without stem/seal damage",
+      "category": "Metal Bellows - Sheet 15",
+      "stage": "Assembly",
+      "quote": "Plug in vise without stem/seal damage",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-15",
+      "section": "assembly-05-sequen-15",
+      "title": "white grease threads/stem/2 lock washers",
+      "category": "Metal Bellows - Sheet 15",
+      "stage": "Assembly",
+      "quote": "white grease threads/stem/2 lock washers",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-16",
+      "section": "assembly-05-sequen-16",
+      "title": "2 lock washers stacked",
+      "category": "Metal Bellows - Sheet 15",
+      "stage": "Assembly",
+      "quote": "2 lock washers stacked",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-17",
+      "section": "assembly-05-sequen-17",
+      "title": "bellows housing lowered without dislodging washers",
+      "category": "Metal Bellows - Sheet 15",
+      "stage": "Assembly",
+      "quote": "bellows housing lowered without dislodging washers",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-18",
+      "section": "assembly-05-sequen-18",
+      "title": "bellows hand-threaded",
+      "category": "Metal Bellows - Sheet 15",
+      "stage": "Assembly",
+      "quote": "bellows hand-threaded",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-19",
+      "section": "assembly-05-sequen-19",
+      "title": "locked stem/coupling nuts used to torque bellows per assembly_02",
+      "category": "Metal Bellows - Sheet 15",
+      "stage": "Assembly",
+      "quote": "locked stem/coupling nuts used to torque bellows per assembly_02",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-20",
+      "section": "assembly-05-sequen-20",
+      "title": "white grease bellows nut",
+      "category": "Metal Bellows - Sheet 15",
+      "stage": "Assembly",
+      "quote": "white grease bellows nut",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-21",
+      "section": "assembly-05-sequen-21",
+      "title": "bellows tool + retainer used",
+      "category": "Metal Bellows - Sheet 15",
+      "stage": "Assembly",
+      "quote": "bellows tool + retainer used",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-22",
+      "section": "assembly-05-sequen-22",
+      "title": "white grease bellows stem at V-rings",
+      "category": "Metal Bellows - Sheet 15",
+      "stage": "Assembly",
+      "quote": "white grease bellows stem at V-rings",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-23",
+      "section": "assembly-05-sequen-23",
+      "title": "black grease gasket area/top",
+      "category": "Metal Bellows - Sheet 15",
+      "stage": "Assembly",
+      "quote": "black grease gasket area/top",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-24",
+      "section": "assembly-05-sequen-24",
+      "title": "yoke stuffing box loose",
+      "category": "Metal Bellows - Sheet 15",
+      "stage": "Assembly",
+      "quote": "yoke stuffing box loose",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-05-sequen-25",
+      "section": "assembly-05-sequen-25",
+      "title": "4 bolts torqued per assembly_02.",
+      "category": "Metal Bellows - Sheet 15",
+      "stage": "Assembly",
+      "quote": "4 bolts torqued per assembly_02.",
+      "source": "Assembly - Sequence Type 3241 (assembly_05_sequence_3241.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-06-sequen-01",
+      "section": "assembly-06-sequen-01",
+      "title": "Common: parts verified",
+      "category": "Sequence Type 3244 Mixing / Diverting",
+      "stage": "Assembly",
+      "quote": "Common: parts verified",
+      "source": "Assembly - Sequence Type 3244 Mixing / Diverting (assembly_06_sequence_3244.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-06-sequen-02",
+      "section": "assembly-06-sequen-02",
+      "title": "body flange in vise",
+      "category": "Sequence Type 3244 Mixing / Diverting",
+      "stage": "Assembly",
+      "quote": "body flange in vise",
+      "source": "Assembly - Sequence Type 3244 Mixing / Diverting (assembly_06_sequence_3244.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-06-sequen-03",
+      "section": "assembly-06-sequen-03",
+      "title": "black grease seat threads",
+      "category": "Sequence Type 3244 Mixing / Diverting",
+      "stage": "Assembly",
+      "quote": "black grease seat threads",
+      "source": "Assembly - Sequence Type 3244 Mixing / Diverting (assembly_06_sequence_3244.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-06-sequen-04",
+      "section": "assembly-06-sequen-04",
+      "title": "counter-clockwise align then clockwise",
+      "category": "Sequence Type 3244 Mixing / Diverting",
+      "stage": "Assembly",
+      "quote": "counter-clockwise align then clockwise",
+      "source": "Assembly - Sequence Type 3244 Mixing / Diverting (assembly_06_sequence_3244.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-06-sequen-05",
+      "section": "assembly-06-sequen-05",
+      "title": "torque each seat per assembly_02",
+      "category": "Sequence Type 3244 Mixing / Diverting",
+      "stage": "Assembly",
+      "quote": "torque each seat per assembly_02",
+      "source": "Assembly - Sequence Type 3244 Mixing / Diverting (assembly_06_sequence_3244.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-06-sequen-06",
+      "section": "assembly-06-sequen-06",
+      "title": "grease gasket area/top",
+      "category": "Sequence Type 3244 Mixing / Diverting",
+      "stage": "Assembly",
+      "quote": "grease gasket area/top",
+      "source": "Assembly - Sequence Type 3244 Mixing / Diverting (assembly_06_sequence_3244.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-06-sequen-07",
+      "section": "assembly-06-sequen-07",
+      "title": "white grease plug stem at V-rings",
+      "category": "Sequence Type 3244 Mixing / Diverting",
+      "stage": "Assembly",
+      "quote": "white grease plug stem at V-rings",
+      "source": "Assembly - Sequence Type 3244 Mixing / Diverting (assembly_06_sequence_3244.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-06-sequen-08",
+      "section": "assembly-06-sequen-08",
+      "title": "yoke stuffing box loose before lowering yoke",
+      "category": "Sequence Type 3244 Mixing / Diverting",
+      "stage": "Assembly",
+      "quote": "yoke stuffing box loose before lowering yoke",
+      "source": "Assembly - Sequence Type 3244 Mixing / Diverting (assembly_06_sequence_3244.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-06-sequen-09",
+      "section": "assembly-06-sequen-09",
+      "title": "grease studs, cross-wise bonnet torque",
+      "category": "Sequence Type 3244 Mixing / Diverting",
+      "stage": "Assembly",
+      "quote": "grease studs, cross-wise bonnet torque",
+      "source": "Assembly - Sequence Type 3244 Mixing / Diverting (assembly_06_sequence_3244.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-06-sequen-10",
+      "section": "assembly-06-sequen-10",
+      "title": "stuffing box snug not over-tightened (record only)",
+      "category": "Sequence Type 3244 Mixing / Diverting",
+      "stage": "Assembly",
+      "quote": "stuffing box snug not over-tightened (record only)",
+      "source": "Assembly - Sequence Type 3244 Mixing / Diverting (assembly_06_sequence_3244.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-06-sequen-11",
+      "section": "assembly-06-sequen-11",
+      "title": "lock + coupling nuts not tightened",
+      "category": "Sequence Type 3244 Mixing / Diverting",
+      "stage": "Assembly",
+      "quote": "lock + coupling nuts not tightened",
+      "source": "Assembly - Sequence Type 3244 Mixing / Diverting (assembly_06_sequence_3244.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "assembly-06-sequen-12",
+      "section": "assembly-06-sequen-12",
+      "title": "remove from vise.",
+      "category": "Sequence Type 3244 Mixing / Diverting",
+      "stage": "Assembly",
+      "quote": "remove from vise.",
+      "source": "Assembly - Sequence Type 3244 Mixing / Diverting (assembly_06_sequence_3244.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "G-001",
+      "section": "G-001",
+      "title": "No PASS without the evidence listed for that rule.",
+      "category": "Global Rules",
+      "stage": "Global Rules",
+      "quote": "No PASS without the evidence listed for that rule.",
+      "source": "Inspection - Agent Contract (inspection_00_agent_contract.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "G-002",
+      "section": "G-002",
+      "title": "Blank source cell = HOLD, reason NOT_SPECIFIED_IN_SOURCE.",
+      "category": "Global Rules",
+      "stage": "Global Rules",
+      "quote": "Blank source cell = HOLD, reason NOT_SPECIFIED_IN_SOURCE.",
+      "source": "Inspection - Agent Contract (inspection_00_agent_contract.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "G-003",
+      "section": "G-003",
+      "title": "Source list ending in \"etc.\" = open list. Unknown value = HOLD, not FAIL.",
+      "category": "Global Rules",
+      "stage": "Global Rules",
+      "quote": "Source list ending in \"etc.\" = open list. Unknown value = HOLD, not FAIL.",
+      "source": "Inspection - Agent Contract (inspection_00_agent_contract.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "G-004",
+      "section": "G-004",
+      "title": "All torque checks require torque_wrench_calibration_valid == true, else HOLD.",
+      "category": "Global Rules",
+      "stage": "Global Rules",
+      "quote": "All torque checks require torque_wrench_calibration_valid == true, else HOLD.",
+      "source": "Inspection - Agent Contract (inspection_00_agent_contract.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "G-005",
+      "section": "G-005",
+      "title": "Every test result must be recorded on the work order. Missing record = HOLD.",
+      "category": "Global Rules",
+      "stage": "Global Rules",
+      "quote": "Every test result must be recorded on the work order. Missing record = HOLD.",
+      "source": "Inspection - Agent Contract (inspection_00_agent_contract.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "NP-001",
+      "section": "NP-001",
+      "title": "At final inspection, nameplate must be present and stamped. Absent/unstamped = FAIL.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "At final inspection, nameplate must be present and stamped. Absent/unstamped = FAIL.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "NP-002",
+      "section": "NP-002",
+      "title": "Nameplate must be riveted to the pre-drilled yoke location, on the yoke on the same side as the body casting markings. Else FAIL.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "Nameplate must be riveted to the pre-drilled yoke location, on the yoke on the same side as the body casting markings. Else FAIL.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "NP-003",
+      "section": "NP-003",
+      "title": "Serial format: ^C-\\d{4}-\\d{1,2}\\.\\d{1,2}$",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "Serial format: ^C-\\d{4}-\\d{1,2}\\.\\d{1,2}$",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "NP-004",
+      "section": "NP-004",
+      "title": "Pos.1 Valve Type must be in: 3241,3244,3245,3248,3249,3251,3253,3254,3255,3256,3258,3281,3284,3286,3347. Else FAIL.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "Pos.1 Valve Type must be in: 3241,3244,3245,3248,3249,3251,3253,3254,3255,3256,3258,3281,3284,3286,3347. Else FAIL.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "NP-005",
+      "section": "NP-005",
+      "title": "Pos.2 Version Index must match ^\\d{2}$ (00,01...). Else FAIL.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "Pos.2 Version Index must match ^\\d{2}$ (00,01...). Else FAIL.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "NP-006",
+      "section": "NP-006",
+      "title": "Pos.3 Body Material known values: A126 Cl.B, A351 CF8M, A352 LC3, A216 WCB, A352 LCB. Open-ended list. Value outside list and not verified on work order = HOLD.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "Pos.3 Body Material known values: A126 Cl.B, A351 CF8M, A352 LC3, A216 WCB, A352 LCB. Open-ended list. Value outside list and not verified on work order = HOLD.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "NP-007",
+      "section": "NP-007",
+      "title": "Pos.5 Size must be numeric inches and equal work order size. Else FAIL.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "Pos.5 Size must be numeric inches and equal work order size. Else FAIL.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "NP-008",
+      "section": "NP-008",
+      "title": "Pos.6 ANSI Class must be in: 125,150,250,300,600,900,1500,2500. Else FAIL.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "Pos.6 ANSI Class must be in: 125,150,250,300,600,900,1500,2500. Else FAIL.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "NP-009",
+      "section": "NP-009",
+      "title": "Pos.7 Cv must equal work order Cv and satisfy inspection_02 if Type 3241. Else FAIL.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "Pos.7 Cv must equal work order Cv and satisfy inspection_02 if Type 3241. Else FAIL.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "NP-010",
+      "section": "NP-010",
+      "title": "Pos.8 Characteristic: EP=Equal Percentage, LN=Linear, OC=On/Off. Else FAIL.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "Pos.8 Characteristic: EP=Equal Percentage, LN=Linear, OC=On/Off. Else FAIL.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "NP-011",
+      "section": "NP-011",
+      "title": "Pos.9 Sealing must be in: ME=Metal/Metal, M3=Metal 316SS, M4=Metal 410SS, ST=Surface Stellite, FS=Plug Full Stellite / seat surface Stellite, HC=Hastelloy C, MO=Monel, ZN=Zirconium, PT=PTFE soft seal plug 316SS. Else FAIL.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "Pos.9 Sealing must be in: ME=Metal/Metal, M3=Metal 316SS, M4=Metal 410SS, ST=Surface Stellite, FS=Plug Full Stellite / seat surface Stellite, HC=Hastelloy C, MO=Monel, ZN=Zirconium, PT=PTFE soft seal plug 316SS. Else FAIL.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "NP-012",
+      "section": "NP-012",
+      "title": "Pos.10 Trim must be in: 1=Flow divider St I, 3=Flow divider St III, B=Balanced no seal ring indication, BP=Balanced PTFE seal ring, BG=Balanced Graphite seal ring, B1=Balanced + divider I, B3=Balanced + divider III. Else FAIL. 1/B1 must use StI Cv table. 3/B3 must use StIII Cv table. Else FAIL.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "Pos.10 Trim must be in: 1=Flow divider St I, 3=Flow divider St III, B=Balanced no seal ring indication, BP=Balanced PTFE seal ring, BG=Balanced Graphite seal ring, B1=Balanced + divider I, B3=Balanced + divider III. Else FAIL. 1/B1 must use StI Cv table. 3/B3 must use StIII Cv table. Else FAIL.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "TAG-001",
+      "section": "TAG-001",
+      "title": "If ASME B16.34 / B31.3 applicable, a stainless tag riveted or wired to the valve stating \"Max. Press <N> psi @ 100°F\" is required. Absent = FAIL.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "If ASME B16.34 / B31.3 applicable, a stainless tag riveted or wired to the valve stating \"Max. Press <N> psi @ 100°F\" is required. Absent = FAIL.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "CRN-001",
+      "section": "CRN-001",
+      "title": "If final destination is Canada, CRN label is required, permanently affixed to body, bonnet, or extension (not yoke/actuator only), showing CRN 0C4462.52 and \"Assembled In Canada\". Absent/wrong location = FAIL. Not Canada = N_A.",
+      "category": "Nameplate and Tagging",
+      "stage": "Identification",
+      "quote": "If final destination is Canada, CRN label is required, permanently affixed to body, bonnet, or extension (not yoke/actuator only), showing CRN 0C4462.52 and \"Assembled In Canada\". Absent/wrong location = FAIL. Not Canada = N_A.",
+      "source": "Inspection - Nameplate and Tagging (inspection_01_nameplate_and_tagging.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [
+        "photo",
+        "video"
+      ],
+      "applicability": "APPROVED"
+    },
+    {
+      "ruleId": "DN65-100",
+      "section": "DN65-100",
+      "title": "1.6 / 0.8 / 0.4 / 0.2 / 0.1",
+      "category": "Test Regulator Type 2392",
+      "stage": "Functional Testing",
+      "quote": "1.6 / 0.8 / 0.4 / 0.2 / 0.1",
+      "source": "Inspection - Test Regulator Type 2392 (inspection_04_test_regulator_2392.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "DN65-100",
+      "section": "DN65-100",
+      "title": "23/37:70, 60:112, 94:112, 145:175",
+      "category": "Test Regulator Type 2412",
+      "stage": "Functional Testing",
+      "quote": "23/37:70, 60:112, 94:112, 145:175",
+      "source": "Inspection - Test Regulator Type 2412 (inspection_05_test_regulator_2412.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-01",
+      "section": "inspection-07-chec-01",
+      "title": "Correct packing slip",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "Correct packing slip",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-02",
+      "section": "inspection-07-chec-02",
+      "title": "part number matches slip",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "part number matches slip",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-03",
+      "section": "inspection-07-chec-03",
+      "title": "description matches part",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "description matches part",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-04",
+      "section": "inspection-07-chec-04",
+      "title": "quantity matches slip",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "quantity matches slip",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-05",
+      "section": "inspection-07-chec-05",
+      "title": "no damage/defects",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "no damage/defects",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-06",
+      "section": "inspection-07-chec-06",
+      "title": "specified documentation present/complete",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "specified documentation present/complete",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-07",
+      "section": "inspection-07-chec-07",
+      "title": "OK items checked off",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "OK items checked off",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-08",
+      "section": "inspection-07-chec-08",
+      "title": "NOT OK items tagged HOLD and QA Manager notified",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "NOT OK items tagged HOLD and QA Manager notified",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-09",
+      "section": "inspection-07-chec-09",
+      "title": "non-conformance reports filed",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "non-conformance reports filed",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-10",
+      "section": "inspection-07-chec-10",
+      "title": "packing slip date-stamped and signed",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "packing slip date-stamped and signed",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-11",
+      "section": "inspection-07-chec-11",
+      "title": "missing part numbers affixed",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "missing part numbers affixed",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-12",
+      "section": "inspection-07-chec-12",
+      "title": "work order number marked on parts",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "work order number marked on parts",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-13",
+      "section": "inspection-07-chec-13",
+      "title": "slip forwarded to purchaser",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "slip forwarded to purchaser",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-14",
+      "section": "inspection-07-chec-14",
+      "title": "parts moved to holding area.",
+      "category": "Receiving Inspection",
+      "stage": "Release Gates",
+      "quote": "parts moved to holding area.",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-15",
+      "section": "inspection-07-chec-15",
+      "title": "Correct actuator, spring range and action",
+      "category": "Valve Testing",
+      "stage": "Release Gates",
+      "quote": "Correct actuator, spring range and action",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-16",
+      "section": "inspection-07-chec-16",
+      "title": "travel indicator adjusted at closed position",
+      "category": "Valve Testing",
+      "stage": "Release Gates",
+      "quote": "travel indicator adjusted at closed position",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-17",
+      "section": "inspection-07-chec-17",
+      "title": "actuator begins moving at correct beginning signal pressure",
+      "category": "Valve Testing",
+      "stage": "Release Gates",
+      "quote": "actuator begins moving at correct beginning signal pressure",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-18",
+      "section": "inspection-07-chec-18",
+      "title": "full stroke at full signal",
+      "category": "Valve Testing",
+      "stage": "Release Gates",
+      "quote": "full stroke at full signal",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-19",
+      "section": "inspection-07-chec-19",
+      "title": "body leakage 4 bar plug open = ZERO",
+      "category": "Valve Testing",
+      "stage": "Release Gates",
+      "quote": "body leakage 4 bar plug open = ZERO",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-20",
+      "section": "inspection-07-chec-20",
+      "title": "water bath test if applicable",
+      "category": "Valve Testing",
+      "stage": "Release Gates",
+      "quote": "water bath test if applicable",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-21",
+      "section": "inspection-07-chec-21",
+      "title": "bellows test if applicable 100 psi air = ZERO bubbles",
+      "category": "Valve Testing",
+      "stage": "Release Gates",
+      "quote": "bellows test if applicable 100 psi air = ZERO bubbles",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-22",
+      "section": "inspection-07-chec-22",
+      "title": "seat leakage 4 bar plug closed per Class IV/VI",
+      "category": "Valve Testing",
+      "stage": "Release Gates",
+      "quote": "seat leakage 4 bar plug closed per Class IV/VI",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-23",
+      "section": "inspection-07-chec-23",
+      "title": "results recorded on work order.",
+      "category": "Valve Testing",
+      "stage": "Release Gates",
+      "quote": "results recorded on work order.",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-24",
+      "section": "inspection-07-chec-24",
+      "title": "Work order text correct/complete",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "Work order text correct/complete",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-25",
+      "section": "inspection-07-chec-25",
+      "title": "assembled valve matches work order",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "assembled valve matches work order",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-26",
+      "section": "inspection-07-chec-26",
+      "title": "nameplate correctly stamped/mounted (inspection_01)",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "nameplate correctly stamped/mounted (inspection_01)",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-27",
+      "section": "inspection-07-chec-27",
+      "title": "CRN/tag labeling per work order",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "CRN/tag labeling per work order",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-28",
+      "section": "inspection-07-chec-28",
+      "title": "body/bellows/seat results marked on work order",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "body/bellows/seat results marked on work order",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-29",
+      "section": "inspection-07-chec-29",
+      "title": "all results within limits",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "all results within limits",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-30",
+      "section": "inspection-07-chec-30",
+      "title": "appearance acceptable with photo evidence (no numeric threshold)",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "appearance acceptable with photo evidence (no numeric threshold)",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-31",
+      "section": "inspection-07-chec-31",
+      "title": "QC certificate tag filled, signed, attached",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "QC certificate tag filled, signed, attached",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-32",
+      "section": "inspection-07-chec-32",
+      "title": "markings/foundry numbers recorded if mill certs apply",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "markings/foundry numbers recorded if mill certs apply",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-33",
+      "section": "inspection-07-chec-33",
+      "title": "specified documentation present",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "specified documentation present",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-34",
+      "section": "inspection-07-chec-34",
+      "title": "correct manual copies attached",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "correct manual copies attached",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-35",
+      "section": "inspection-07-chec-35",
+      "title": "accessories/tubing match work order",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "accessories/tubing match work order",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-07-chec-36",
+      "section": "inspection-07-chec-36",
+      "title": "QC sign-off and release to shipping.",
+      "category": "Final Inspection / Release",
+      "stage": "Release Gates",
+      "quote": "QC sign-off and release to shipping.",
+      "source": "Inspection - Checklists and Release Gates (inspection_07_checklists_and_release_gates.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-08-ambi-01",
+      "section": "inspection-08-ambi-01",
+      "title": "6. Series 1a bottom flange torque is only embossed on the flange",
+      "category": "Ambiguities and Blockers. Always HOLD, do not infer.",
+      "stage": "Global Rules",
+      "quote": "6. Series 1a bottom flange torque is only embossed on the flange",
+      "source": "Inspection - Ambiguities and Blockers. Always HOLD, do not infer. (inspection_08_ambiguities_and_blockers.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-08-ambi-02",
+      "section": "inspection-08-ambi-02",
+      "title": "additional instructions sheet for 2.5-6in is blank.",
+      "category": "Ambiguities and Blockers. Always HOLD, do not infer.",
+      "stage": "Global Rules",
+      "quote": "additional instructions sheet for 2.5-6in is blank.",
+      "source": "Inspection - Ambiguities and Blockers. Always HOLD, do not infer. (inspection_08_ambiguities_and_blockers.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-08-ambi-03",
+      "section": "inspection-08-ambi-03",
+      "title": "9. Non-numeric terms: \"snug / do not over-tighten\", \"tighten securely\", \"acceptable appear",
+      "category": "Ambiguities and Blockers. Always HOLD, do not infer.",
+      "stage": "Global Rules",
+      "quote": "9. Non-numeric terms: \"snug / do not over-tighten\", \"tighten securely\", \"acceptable appearance\". Require record/photo",
+      "source": "Inspection - Ambiguities and Blockers. Always HOLD, do not infer. (inspection_08_ambiguities_and_blockers.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    },
+    {
+      "ruleId": "inspection-08-ambi-04",
+      "section": "inspection-08-ambi-04",
+      "title": "no numeric PASS basis.",
+      "category": "Ambiguities and Blockers. Always HOLD, do not infer.",
+      "stage": "Global Rules",
+      "quote": "no numeric PASS basis.",
+      "source": "Inspection - Ambiguities and Blockers. Always HOLD, do not infer. (inspection_08_ambiguities_and_blockers.md)",
+      "reference": "",
+      "features": [],
+      "modalities": [],
+      "applicability": "REFERENCE_ONLY"
+    }
+  ]
+}

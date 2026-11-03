@@ -42,6 +42,8 @@ def evaluate_rule(rule: dict, observations: list[dict]) -> str:
             return "WARNING"  # visual indication -> review, never certified FAIL
         if obs.get("kind") == "component_present" and obs.get("certainty") == "observed":
             return "PASS"
+        if obs.get("kind") == "component_absent" and obs.get("certainty") == "observed":
+            return "FAIL"  # feature clearly visible-area absent: a genuine visual fail
     return "INSUFFICIENT_EVIDENCE"
 
 

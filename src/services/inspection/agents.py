@@ -61,8 +61,8 @@ class VideoAgent(SubAgent):
 
     async def run(self, ctx, evidence, rule):
         ctx.record(self.name, "started", evidence.get("eventId", ""))
-        result = await asyncio.to_thread(meta_adapter.screen_visual, evidence.get("path", ""), rule, "video")
-        obs = {"kind": "visual", "source": "video", "tier": "screen", "ruleId": rule.get("ruleId"), "lookFor": {"features": rule.get("features", []), "acceptanceQuote": rule.get("quote")}, **result}
+        result = await asyncio.to_thread(meta_adapter.screen_visual, resolve_evidence_file(evidence), rule, "video")
+        obs = {"kind": "visual", "source": "video", "tier": "screen", "ruleId": rule.get("ruleId"), "evidenceId": evidence.get("evidenceId"), "eventId": evidence.get("eventId"), "lookFor": {"features": rule.get("features", []), "acceptanceQuote": rule.get("quote")}, **result}
         ctx.record(self.name, "completed" if result.get("status") != "unavailable" else "unavailable", evidence.get("eventId", ""))
         return obs
 
@@ -76,11 +76,11 @@ class ImageAgent(SubAgent):
 
     async def run(self, ctx, evidence, rule):
         ctx.record(self.name, "started", evidence.get("eventId", ""))
-        screen = await asyncio.to_thread(meta_adapter.screen_visual, evidence.get("path", ""), rule, "photo")
-        obs = {"kind": "visual", "source": "photo", "tier": "screen", "ruleId": rule.get("ruleId"), "lookFor": {"features": rule.get("features", []), "acceptanceQuote": rule.get("quote")}, **screen}
+        screen = await asyncio.to_thread(meta_adapter.screen_visual, resolve_evidence_file(evidence), rule, "photo")
+        obs = {"kind": "visual", "source": "photo", "tier": "screen", "ruleId": rule.get("ruleId"), "evidenceId": evidence.get("evidenceId"), "eventId": evidence.get("eventId"), "lookFor": {"features": rule.get("features", []), "acceptanceQuote": rule.get("quote")}, **screen}
         if meta_adapter.needs_review(screen, rule):
             ctx.record(self.name, "escalated-to-review", evidence.get("eventId", ""))
-            review = await asyncio.to_thread(meta_adapter.review_visual, evidence.get("path", ""), rule, screen)
+            review = await asyncio.to_thread(meta_adapter.review_visual, resolve_evidence_file(evidence), rule, screen, "photo")
             obs["review"] = review
         ctx.record(self.name, "completed" if screen.get("status") != "unavailable" else "unavailable", evidence.get("eventId", ""))
         return obs
@@ -275,7 +275,7 @@ class Orchestrator:
             try:
                 obs = await agent.run(ctx, evidence, rule)
                 self.store.mark(key, "DONE")
-                obs["ruleStatus"] = coordinator.evaluate_rule(rule, [obs] if obs.get("kind") in ("geometry", "possible_surface_line", "component_present") else [])
+                obs["ruleStatus"] = coordinator.evaluate_rule(rule, [obs] if obs.get("kind") in ("geometry", "possible_surface_line", "component_present", "component_absent") else [])
                 return obs
             except Exception as exc:  # failure is isolated; retry, never block siblings
                 last_error = str(exc)
@@ -291,20 +291,51 @@ class Orchestrator:
         return await asyncio.gather(*(self.dispatch_one(ctx, ev, rule) for ev, rule in items))
 
     async def dispatch_evidence(self, ctx: InspectionContext, evidences: list[dict], worklist: dict) -> list[dict]:
-        """Rule-guided dispatch: associate each evidence item to its worklist
-        task(s) first, then hand the owning sub-agent a task envelope (pinned
-        quote, feature, threshold). No task -> logged as unassociated, never
-        silently analysed against an invented rule."""
+        """SAM-routed dispatch: for each photo/video, SAM 3.1 detects which
+        components are present, then the deterministic visual-routing
+        mapping for the equipment family/type (visual_routing.select_rules)
+        picks which applicable rules may be applied to that evidence.
+        Rules routed to components that are not visible are not applied;
+        rules needing evidence outside the image are skipped unless
+        critical, in which case they are returned as
+        INSUFFICIENT_EVIDENCE (evidence needed) without being screened.
+        No task -> logged as unassociated, never silently analysed
+        against an invented rule."""
         import worklist as wl
+        import visual_routing as vr
         jobs: list[tuple[dict, dict]] = []
+        evidence_needed: list[dict] = []
         for ev in evidences:
             tasks = wl.associate(ev, worklist)
             if not tasks:
                 ctx.record("orchestrator", "unassociated", f"{ev.get('eventId')}: no worklist task for {ev.get('mediaType')}")
                 continue
+            if ev.get("mediaType") in ("photo", "video"):
+                source = "video" if ev.get("mediaType") == "video" else "photo"
+                mapping = vr.get_mapping(ev.get("family") or vr.DEFAULT_FAMILY,
+                                         ev.get("type") or vr.DEFAULT_TYPE)
+                detected = ev.get("detectedComponents")
+                if detected is None:
+                    found = await asyncio.to_thread(
+                        meta_adapter.detect_components, resolve_evidence_file(ev), source, mapping["components"])
+                    detected = [c["id"] for c in found]
+                ctx.record("orchestrator", "sam-detected",
+                           f"{ev.get('eventId')}: {', '.join(detected) if detected else 'no components detected'}")
+                routed = vr.select_rules(tasks, list(detected), source, mapping=mapping)
+                for t in routed["skipped"]:
+                    ctx.record("orchestrator", "rule-skipped", f"{ev.get('eventId')} rule {t.get('ruleId')}: {t.get('reason')}")
+                for t in routed["evidenceNeeded"]:
+                    ctx.record("orchestrator", "evidence-needed", f"{ev.get('eventId')} rule {t.get('ruleId')}: {t.get('reason')}")
+                    evidence_needed.append({
+                        "kind": "evidence_needed", "source": source, "ruleId": t.get("ruleId"),
+                        "ruleStatus": "INSUFFICIENT_EVIDENCE",
+                        "evidenceId": ev.get("evidenceId"), "eventId": ev.get("eventId"),
+                        "needs": t.get("needs", []), "notes": t.get("reason", ""),
+                    })
+                tasks = routed["selected"]
             for task in tasks:
                 jobs.append((ev, wl.task_envelope(ctx.session_id, ev, task)["rule"]))
-        return await self.dispatch(ctx, jobs)
+        return await self.dispatch(ctx, jobs) + evidence_needed
 
     async def recover_pending(self, contexts: dict[str, InspectionContext]) -> list[dict]:
         """After a restart, spin the owning sub-agents back up for every
