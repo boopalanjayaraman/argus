@@ -1,8 +1,8 @@
 """Session worklist: what each sub-agent is tasked to look for.
 
-Built at session creation from the pinned rule pack (library -> valve type
--> customer spec cascade lives in the Argus API / PRD-06; this module loads
-the resulting applicable set). Media agents never decide rules and never
+Built from the session's pinned rule snapshot, which the Argus API
+selects at session creation (library -> valve type -> customer spec
+cascade, PRD-06) and sends with every analysis request. Media agents never decide rules and never
 issue verdicts — but they are never rule-blind either: every dispatch
 carries a TaskEnvelope with the pinned rule, its feature, its quote, and
 its approved threshold (when one exists).
@@ -20,9 +20,11 @@ def load_rules(rules_path: str | Path | None = None) -> list[dict]:
     return pack["rules"] if isinstance(pack, dict) else pack
 
 
-def build_worklist(model_id: str, rules_path: str | Path | None = None) -> dict:
-    """Applicable inspection tasks for a session on this CAD model."""
-    rules = load_rules(rules_path)
+def build_worklist(model_id: str, rules_path: str | Path | None = None, rules: list[dict] | None = None) -> dict:
+    """Applicable inspection tasks for a session on this CAD model.
+    `rules` is the session's pinned rule snapshot (sent by the Argus API);
+    without it the indexed library is used (tests / ad-hoc calls)."""
+    rules = rules if rules is not None else load_rules(rules_path)
     tasks, excluded = [], []
     for r in rules:
         if r.get("applicability") == "REFERENCE_ONLY" or not r.get("modalities"):
@@ -38,6 +40,9 @@ def build_worklist(model_id: str, rules_path: str | Path | None = None) -> dict:
             "features": r.get("features", []),
             "modalities": r.get("modalities", []),
             "thresholdMm": r.get("thresholdMm"),
+            "threshold": r.get("threshold"),
+            "maxSeverity": r.get("maxSeverity"),
+            "origin": r.get("origin", "library"),
             "applicability": r.get("applicability"),
             "model_id": model_id,
         })

@@ -5,8 +5,9 @@ CAD reference: generated from the given CAD by cad_reference.py
 the Simulator. The Simulator's valve_CAD_reference_full_surface.ply remains
 a test fixture only.
 Method: voxel downsample -> FPFH global registration (RANSAC) when far apart,
-then point-to-point ICP. Reports RMSE, coverage, mean deviation. No verdict:
-the rule gate in coordinator.py decides, using geometry_gate().
+then point-to-point ICP. Reports RMS / mean / 95th-percentile point-to-plane deviation, ICP fitness
+and CAD surface coverage. No verdict: the rule gate in coordinator.py
+decides, using geometry_gate() and the scan rules' approved thresholds.
 """
 from __future__ import annotations
 import os
@@ -125,13 +126,14 @@ def _register_cloud(scan, cad_path: str | None = None, voxel: float = VOXEL) -> 
     covered = cad_to_scan <= MAX_CORR
     dists = np.abs(signed)
     rmse = float(np.sqrt(np.mean(signed ** 2)))
-    valid = rmse <= float(os.environ.get("GEO_REGISTRATION_MAX_RMSE_MM", "2.0")) * 10  # coarse-cloud scale; gate re-checks at rule level
     return {
         "status": "valid" if icp.fitness > 0.1 else "insufficient",
         "rmseMm": round(rmse, 3),
         "fitness": round(float(icp.fitness), 4),
         "surfaceCoverageFraction": round(float(covered.mean()), 4),
         "meanDeviationMm": round(float(dists.mean()), 3),
+        "p95DeviationMm": round(float(np.percentile(dists, 95)), 3),
+        "rmsDeviationMm": round(rmse, 3),
         "scanPoints": int(len(scan.points)),
         "cadPoints": int(len(cad.points)),
         "transform": icp.transformation.tolist(),

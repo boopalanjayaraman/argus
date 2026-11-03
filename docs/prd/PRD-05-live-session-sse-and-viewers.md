@@ -1,6 +1,6 @@
 # PRD-05 — Live Session: SSE & Viewers (Argus)
 
-Status: Implemented (v1: Fastify+React, local file storage; Mongo/GCS/Meta adapters pending) · Source: Spec §4 · Tech Stack §§5,7 · Depends on: PRD-04
+Status: Implemented (v2, 03 Nov 2026: web consumes SSE with Last-Event-ID resume; polling replaced) · Source: Spec §4 · Tech Stack §§5,7 · Depends on: PRD-04
 
 ## Specs
 
@@ -14,7 +14,8 @@ Out of scope: finding generation (PRD-07), dossier (PRD-08).
 ## Technical Specs
 
 - **Pattern:** SSE `GET /api/v1/inspections/:id/events` — events persisted in Mongo `events` with monotonic `eventSeq` **before** publish; types: `inspection.created, evidence.received/processing, source.state, observation.created, finding.created/updated, rule.progress, coverage.updated, source.complete, inspection.finalizing/closed, dossier.ready, inspection.error`.
-- **Reconnect pattern:** client sends `Last-Event-ID`; on reconnect refetch session snapshot then resume stream — never replay placeholder findings. Playback/point rendering never blocks on inference.
+- **Reconnect pattern:** the browser `EventSource` resends `Last-Event-ID` automatically; the server replays only events with `eventSeq` greater than it (header or `?lastEventId=`), sends `retry: 2000` and a heartbeat comment every `SSE_HEARTBEAT_MS`. The web app refetches the session snapshot (session, evidence, rules, documents) on each event, debounced 200 ms, plus a 15 s reconciliation poll in case SSE is blocked by a proxy. Events are unnamed SSE messages; the type is in the payload. A closed (Completed/Terminated) session opens no stream — it is frozen — and keeps only the reconciliation poll. Playback/point rendering never blocks on inference.
+- **Additional events (v2):** `source.state` on every lifecycle change, `observation.created` for SAM segmentations, `inspection.snapshot` when an order document re-pins the snapshot.
 - **3D:** React Three Fiber + Drei; point chunks appended by `evidenceId` (dedupe on replay); CAD highlight only when `cadAnchor` validated, else image-region highlight only.
 - **Configuration:** `SSE_HEARTBEAT_MS` (default 15000), signed-URL TTL for media.
 
@@ -42,4 +43,4 @@ Out of scope: finding generation (PRD-07), dossier (PRD-08).
 
 ## Review gate
 
-Reply `go PRD-05` to implement, or edit this file first.
+v2 (SSE in the web app) implemented on the user's go-ahead of 03 Nov 2026 (issue #14). Edit this file to change scope.

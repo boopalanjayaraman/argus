@@ -5,21 +5,31 @@ only — never verdicts, tolerances, citations or evidence. Rule verdicts are
 decided by coordinator.py from these observations.
 
 API: Meta Model API, Responses API at https://api.meta.ai/v1
-(POST /responses, Bearer META_API_KEY). Video goes through the Files API
-(POST /files, purpose=user_data) and is referenced by file_id.
+(POST /responses, Bearer META_API_KEY). Video clips go through the Files
+API (POST /files, purpose=user_data) and are referenced by file_id; by
+default a video segment is screened from its keyframe (media.model_still)
+and only motion rules (8.2-8.4) get the clip.
 Models (verified live 2026-11-03 via GET /v1/models):
   Tier 1 screen:  muse-spark-1.3   (META_SCREEN_MODEL)
   Tier 2 review:  muse-wonder-1.0  (META_REVIEW_MODEL)
-  Segmentation:   sam-3.1          (META_SAM_MODEL; not yet wired)
+  Segmentation:   sam-3.1          (META_SAM_MODEL) — one concept per
+                  request; output parsed with meta_sam_parser into boxes,
+                  one-bit masks (as SVG paths) and confidences.
 """
 from __future__ import annotations
+import asyncio
 import base64
+import concurrent.futures
+import hashlib
 import json
 import os
+import threading
 import time
 import urllib.error
 import urllib.request
 import uuid
+
+import media
 
 SCREEN_MODEL = os.environ.get("META_SCREEN_MODEL", "muse-spark-1.3")
 REVIEW_MODEL = os.environ.get("META_REVIEW_MODEL", "muse-wonder-1.0")
@@ -119,11 +129,18 @@ def _parse_observation(text: str) -> dict:
     return {"kind": kind, "certainty": certainty, "notes": str(obj.get("notes") or "")[:300]}
 
 
-def _media_content(path: str, source: str, timeout_s: float) -> dict:
-    if source == "video":
+_MOTION_CODES = {"8.2", "8.3", "8.4"}  # need the clip, not a still
+
+
+def _media_content(path: str, source: str, timeout_s: float, rule: dict | None = None) -> dict:
+    """Model input for one evidence item: a downscaled still (photo, or the
+    keyframe of a video segment), or the clip itself for motion rules."""
+    code = (rule or {}).get("ruleId") or ""
+    if source == "video" and (code in _MOTION_CODES or os.environ.get("VIDEO_SCREEN_MODE") == "clip"):
         return {"type": "input_file", "file_id": _upload_file_cached(path, timeout_s)}
-    mime = "image/png" if path.lower().endswith(".png") else "image/jpeg"
-    with open(path, "rb") as fh:
+    still = media.model_still(path, source)
+    mime = "image/png" if still.lower().endswith(".png") else "image/jpeg"
+    with open(still, "rb") as fh:
         encoded = base64.b64encode(fh.read()).decode()
     return {"type": "input_image", "image_url": f"data:{mime};base64,{encoded}"}
 
@@ -140,10 +157,14 @@ def _visual(model: str, evidence_path: str, rule: dict, source: str) -> dict:
         f"\"{rule.get('quote', '')}\" Features to look for: {features}. "
         "Judge only what is visible in this evidence."
     )
+    if rule.get("orderContext"):
+        prompt += (" Compare visible markings and configuration against this customer order "
+                   f"document (text extracted from the uploaded file): \"\"\"{rule['orderContext'][:3000]}\"\"\" "
+                   "Report a mismatch only when the evidence and the order both show the value.")
     try:
         text = _call_model(model, [
             {"type": "input_text", "text": prompt},
-            _media_content(evidence_path, source, timeout_s),
+            _media_content(evidence_path, source, timeout_s, rule),
         ])
     except Exception as exc:
         return {"status": "unavailable", "reason": f"Meta API call failed: {exc}", "model": model}
@@ -174,50 +195,121 @@ def _upload_file_cached(path: str, timeout_s: float) -> str:
     return _FILE_ID_CACHE[key]
 
 
-def _sam_detect(path: str, source: str, concept: str) -> int:
-    """One SAM 3.1 concept prompt; returns the number of boxes found."""
-    timeout_s = float(os.environ.get("META_TIMEOUT_MS", "120000")) / 1000.0
-    if source == "video":
-        media = {"type": "input_file", "file_id": _upload_file_cached(path, timeout_s)}
-    else:
-        media = _media_content(path, source, timeout_s)
+# --- SAM 3.1 segmentation -------------------------------------------------
+
+SAM_MIN_CONFIDENCE = float(os.environ.get("SAM_MIN_CONFIDENCE", "0.5"))
+SAM_CONCURRENCY = int(os.environ.get("SAM_CONCURRENCY", "6"))
+_MAX_PATH_CHARS = 20000
+_SAM_CACHE: dict[str, dict] = {}
+_SAM_LOCK = threading.Lock()
+
+
+def _sam_stream_events(still: str, concept: str, timeout_s: float) -> list[dict]:
+    """One SAM 3.1 concept request on a still; returns the raw stream events."""
+    with open(still, "rb") as fh:
+        encoded = base64.b64encode(fh.read()).decode()
+    mime = "image/png" if still.lower().endswith(".png") else "image/jpeg"
     payload = {"model": SAM_MODEL, "stream": True,
+               "metadata": {"include_confidence": "true", "mask_encoding": "one_bit"},
                "input": [{"type": "message", "role": "user", "content": [
-                   {"type": "input_text", "text": concept}, media]}]}
+                   {"type": "input_text", "text": concept},
+                   {"type": "input_image", "image_url": f"data:{mime};base64,{encoded}"}]}]}
     req = urllib.request.Request(API_BASE + "/responses", data=json.dumps(payload).encode(),
                                  headers={"Authorization": f"Bearer {os.environ['META_API_KEY']}",
                                           "Content-Type": "application/json"}, method="POST")
-    text_parts: list[str] = []
+    events: list[dict] = []
     with urllib.request.urlopen(req, timeout=timeout_s) as resp:
         for raw in resp:
             line = raw.decode(errors="replace").strip()
-            if not line.startswith("data:"):
+            if not line.startswith("data:") or line[5:].strip() in ("", "[DONE]"):
                 continue
             try:
-                event = json.loads(line[5:])
+                events.append(json.loads(line[5:]))
             except json.JSONDecodeError:
                 continue
-            if event.get("type") == "response.output_text.delta":
-                text_parts.append(event.get("delta", ""))
-    return "".join(text_parts).count("<|box;")
+    return events
+
+
+def parse_sam_events(events: list[dict], min_confidence: float = SAM_MIN_CONFIDENCE) -> dict:
+    """SAM stream events -> {objects:[{objectId, box, confidence, mask}]}.
+    Parsed with Meta's meta_sam_parser; masks become SVG paths in the
+    mask's own bounds (translate by mask.bounds.left/top to draw)."""
+    import meta_sam_parser as msp
+
+    async def source():
+        for e in events:
+            yield e
+
+    async def run():
+        return await msp.parse_responses_stream(source(), msp.image_segmentation_format()).final_result()
+
+    result = asyncio.run(run())
+    objects: dict[int, dict] = {}
+    for rec in result.records:
+        if rec.kind == "box":
+            objects.setdefault(rec.object_id, {"objectId": rec.object_id})
+            objects[rec.object_id]["box"] = {"left": rec.left, "top": rec.top, "right": rec.right, "bottom": rec.bottom}
+            objects[rec.object_id]["confidence"] = rec.confidence
+        elif rec.kind == "mask":
+            obj = objects.setdefault(rec.object_id, {"objectId": rec.object_id})
+            try:
+                path = msp.decode_mask_to_svg_path(rec.mask)
+            except Exception:
+                path = ""
+            b = rec.bounds
+            obj["mask"] = {"bounds": {"left": b.left, "top": b.top, "right": b.right, "bottom": b.bottom},
+                           "encoding": str(rec.mask.encoding), "svgPath": path if len(path) <= _MAX_PATH_CHARS else ""}
+            if obj.get("confidence") is None:
+                obj["confidence"] = rec.confidence
+    kept = [o for o in objects.values() if o.get("box") and (o.get("confidence") is None or o["confidence"] >= min_confidence)]
+    return {"objects": kept, "outcome": getattr(result.outcome, "status", str(result.outcome)),
+            "diagnostics": len(result.diagnostics)}
+
+
+def segment_concept(evidence_path: str, source: str, concept: str) -> dict:
+    """SAM 3.1 on one concept, cached by (media content, concept)."""
+    still = media.model_still(evidence_path, source)
+    key = hashlib.sha256(f"{media.sha256_file(still)}|{concept}|{SAM_MODEL}".encode()).hexdigest()
+    cache_file = os.path.join(media.CACHE_DIR, f"sam-{key}.json")
+    with _SAM_LOCK:
+        if key in _SAM_CACHE:
+            return _SAM_CACHE[key]
+    if os.path.exists(cache_file):
+        result = json.loads(open(cache_file).read())
+    else:
+        timeout_s = float(os.environ.get("SAM_TIMEOUT_MS", "240000")) / 1000.0
+        started = time.time()
+        result = parse_sam_events(_sam_stream_events(still, concept, timeout_s))
+        dims = media.dimensions(still)
+        result.update({"concept": concept, "model": SAM_MODEL, "seconds": round(time.time() - started, 1),
+                       "width": dims[0] if dims else None, "height": dims[1] if dims else None})
+        os.makedirs(media.CACHE_DIR, exist_ok=True)
+        with open(cache_file, "w") as fh:
+            fh.write(json.dumps(result))
+    with _SAM_LOCK:
+        _SAM_CACHE[key] = result
+    return result
 
 
 def detect_components(evidence_path: str, source: str, components: list[dict]) -> list[dict]:
-    """SAM 3.1 component detection: which configured valve components are
-    present in this evidence. Returns [{id, prompt, boxes}] for matches."""
-    if not _configured():
+    """SAM 3.1 component detection: one concept request per component, run
+    in parallel (SAM_CONCURRENCY). Returns detected components with their
+    boxes, masks and confidences: [{id, prompt, boxes, objects, width, height}].
+    A failed concept request is reported with `error`, never as detected."""
+    if not _configured() or not evidence_path or not os.path.exists(evidence_path):
         return []
-    if not evidence_path or not os.path.exists(evidence_path):
-        return []
-    found = []
-    for comp in components:
+
+    def one(comp: dict) -> dict:
         try:
-            boxes = _sam_detect(evidence_path, source, comp["samPrompt"])
-        except Exception:
-            boxes = 0
-        if boxes:
-            found.append({"id": comp["id"], "prompt": comp["samPrompt"], "boxes": boxes})
-    return found
+            seg = segment_concept(evidence_path, source, comp["samPrompt"])
+            return {"id": comp["id"], "prompt": comp["samPrompt"], "boxes": len(seg["objects"]), "objects": seg["objects"],
+                    "width": seg.get("width"), "height": seg.get("height"), "seconds": seg.get("seconds")}
+        except Exception as exc:
+            return {"id": comp["id"], "prompt": comp["samPrompt"], "boxes": 0, "objects": [], "error": str(exc)[:200]}
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, SAM_CONCURRENCY)) as pool:
+        results = list(pool.map(one, components))
+    return results
 
 
 def screen_visual(evidence_path: str, rule: dict, source: str = "image") -> dict:
@@ -231,10 +323,3 @@ def review_visual(evidence_path: str, rule: dict, screen: dict | None = None, so
     if isinstance(screen, str):  # tolerate the legacy positional call
         source, screen = screen, None
     return _visual(REVIEW_MODEL, evidence_path, rule, source)
-
-
-def segment_visual(evidence_path: str, prompt: str) -> dict:
-    """SAM 3.1 segmentation: not yet wired into the verdict path."""
-    if not _configured():
-        return {"status": "unavailable", "reason": "META_API_KEY not set or META_ADAPTER_LIVE!=1 (see .env.example)", "model": SAM_MODEL}
-    return {"status": "unavailable", "reason": "segmentation not yet wired (observations flow does not consume masks)", "model": SAM_MODEL}

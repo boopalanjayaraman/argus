@@ -2,15 +2,18 @@
 
 Orchestrator + independent sub-agents (agents.py): each evidence event is
 routed to the one sub-agent that owns its media type; independent events run
-in parallel; all outcomes log under the shared session context.
+in parallel; all outcomes log under the shared session context. The Argus
+API sends the session's pinned rule snapshot with every request, so the
+rules analysed are always the ones pinned at session creation.
 """
 import json
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import coordinator, geometry, meta_adapter
+import documents
 import worklist as wl
-from agents import Orchestrator, InspectionContext
+from agents import Orchestrator, InspectionContext, resolve_evidence_file
 
 app = FastAPI(title="argus-inspection")
 orchestrator = Orchestrator(store_path=os.environ.get("AGENT_JOBS_FILE", "data/agent_jobs.json"))
@@ -39,12 +42,18 @@ class BatchRequest(BaseModel):
 class EvidenceBatchRequest(BaseModel):
     sessionId: str
     model_id: str = "CVS6000_VALVE"
+    family: str | None = None
+    type: str | None = None
+    rules: list[dict] | None = None  # pinned session snapshot
+    orderContext: str | None = None
+    skipRuleIds: list[str] | None = None
     evidences: list[dict]
 
 
 @app.get("/health")
 def health():
-    return {"ok": True, "geometry": bool(geometry.CAD_REFERENCE_PLY), "metaConfigured": meta_adapter._configured(), "agents": [a.name for a in orchestrator.agents] + ["report-agent"]}
+    return {"ok": True, "geometry": bool(geometry.CAD_REFERENCE_PLY), "metaConfigured": meta_adapter._configured(),
+            "samModel": meta_adapter.SAM_MODEL, "agents": [a.name for a in orchestrator.agents] + ["report-agent"]}
 
 
 @app.post("/analyze")
@@ -63,36 +72,42 @@ async def analyze_batch(req: BatchRequest):
 
 @app.get("/worklist/{model_id}")
 def get_worklist(model_id: str):
-    import worklist as wl
     return wl.build_worklist(model_id)
 
 
 @app.post("/analyze-evidence")
 async def analyze_evidence(req: EvidenceBatchRequest):
-    """Rule-guided entry point: build the session worklist for the CAD model,
-    associate each evidence item to its task(s), and dispatch task envelopes
-    to the owning sub-agents in parallel."""
-    import worklist as wl
+    """Rule-guided entry point: build the worklist from the pinned rules,
+    let SAM route each photo/video to the rules its visible components
+    allow, and dispatch task envelopes to the owning sub-agents."""
     ctx = contexts.setdefault(req.sessionId, InspectionContext(session_id=req.sessionId))
-    worklist = wl.build_worklist(req.model_id)
-    observations = await orchestrator.dispatch_evidence(ctx, req.evidences, worklist)
+    worklist = wl.build_worklist(req.model_id, rules=req.rules)
+    try:
+        observations = await orchestrator.dispatch_evidence(
+            ctx, req.evidences, worklist, family=req.family, type=req.type,
+            order_context=req.orderContext, skip_rule_ids=req.skipRuleIds)
+    except KeyError as exc:  # no routing mapping for this equipment
+        raise HTTPException(status_code=422, detail=str(exc))
     return {"worklist": worklist["counts"], "observations": observations, "agentLog": ctx.log}
 
 
 class CompareMergedRequest(BaseModel):
     sessionId: str
     model_id: str = "CVS6000_VALVE"
+    rules: list[dict] | None = None
     evidences: list[dict]
 
 
 @app.post("/compare-merged")
 async def compare_merged(req: CompareMergedRequest):
     """Merged-scan CAD comparison: all chunks of the session as one cloud,
-    registered against the CAD reference by the pointcloud-agent."""
+    registered against the CAD reference by the pointcloud-agent; pinned
+    scan rules are decided from it by the deterministic gate."""
     ctx = contexts.setdefault(req.sessionId, InspectionContext(session_id=req.sessionId))
     if os.environ.get("AGENT_TRANSPORT") == "http":
         import urllib.request as ur
-        payload = json.dumps({"evidences": req.evidences, "sessionId": req.sessionId}).encode()
+        payload = json.dumps({"evidences": req.evidences, "sessionId": req.sessionId,
+                              "rules": req.rules or [], "model_id": req.model_id}).encode()
         request = ur.Request(os.environ.get("POINTCLOUD_AGENT_URL", "http://127.0.0.1:8103") + "/compare-merged",
                              data=payload, headers={"Content-Type": "application/json"})
         with ur.urlopen(request, timeout=600) as resp:
@@ -102,8 +117,27 @@ async def compare_merged(req: CompareMergedRequest):
         return {"observation": result["observation"], "agentLog": ctx.log}
     agent = next(a for a in orchestrator.agents if a.name == "pointcloud-agent")
     local = getattr(agent, "_local", agent)
-    obs = await local.compare_merged(ctx, req.evidences)
+    obs = await local.compare_merged(ctx, req.evidences, rules=req.rules, model_id=req.model_id)
     return {"observation": obs, "agentLog": ctx.log}
+
+
+class DocumentRequest(BaseModel):
+    url: str | None = None
+    path: str | None = None
+    filename: str
+
+
+@app.post("/documents/extract")
+def extract_document(req: DocumentRequest):
+    """Text, order number and explicitly numbered order rules of an uploaded
+    customer specification / work order (PDF, DOCX, XLSX)."""
+    local = resolve_evidence_file({"url": req.url, "path": req.path, "filename": req.filename})
+    try:
+        return documents.describe(local, req.filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=415, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"could not read document: {exc}")
 
 
 @app.get("/sessions/{session_id}/log")

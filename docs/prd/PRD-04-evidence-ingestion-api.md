@@ -1,6 +1,6 @@
 # PRD-04 — Evidence Ingestion API (Argus)
 
-Status: Implemented (v1: Fastify+React, local file storage; Mongo/GCS/Meta adapters pending) · Source: Spec §10.3 · Tech Stack §5 · Depends on: PRD-01, PRD-03 · **Contract twin: Simulator PRD-S03 must match this exactly.**
+Status: Implemented (Fastify+React; MongoDB Atlas + GCS adapters env-gated) · Source: Spec §10.3 · Tech Stack §5 · Depends on: PRD-01, PRD-03 · **Contract twin: Simulator PRD-S03 must match this exactly.**
 
 ## Specs
 
@@ -15,7 +15,7 @@ Out of scope: inference (PRD-07), SSE fan-out details (PRD-05).
 
 - **Idempotency pattern:** unique index `(sessionId, eventId)`; repeat with identical payload returns original acceptance; same ID with conflicting payload → `409`. This is what makes Simulator retries safe.
 - **Retry contract (server side):** `429/5xx` are retryable by sender with same `eventId`; `400/404/409/413/415` terminal. Rate/size limits via Fastify plugins; ingestion token (`ARGUS_INGEST_TOKEN`, server-to-server) when externally exposed — never in browser/simulator bundles as a login.
-- **Storage pattern:** fast path only — validate → hash → GCS put → Mongo `evidence`+`events` insert → enqueue bounded analysis job → `202`. No model call in request path. Originals immutable; derived artifacts are new objects.
+- **Storage pattern:** fast path only — validate → hash → GCS put → Mongo `evidence`+`events` insert → enqueue bounded analysis job (PRD-07 live queue) → `202`. No model call in request path. Originals immutable; derived artifacts are new objects. `FINALIZING` also returns `409 SESSION_CLOSED`.
 - **Configuration:** `MAX_VIDEO_MB / MAX_PHOTO_MB / MAX_POINTCLOUD_MB`, `GCS_BUCKET`, `MONGODB_URI` (env only).
 
 ## Acceptance

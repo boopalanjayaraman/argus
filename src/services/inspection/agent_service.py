@@ -36,13 +36,15 @@ def build_app(kind: str) -> FastAPI:
     class MergedRequest(BaseModel):
         evidences: list[dict]
         sessionId: str = "insp-unknown"
+        rules: list[dict] | None = None
+        model_id: str | None = None
 
     @app.post("/compare-merged")
     async def compare_merged(req: MergedRequest):
         if not hasattr(agent, "compare_merged"):
             return {"kind": "rejected", "agent": agent.name, "error": f"{agent.name} does not support merged comparison"}
         ctx = agents_mod.InspectionContext(session_id=req.sessionId)
-        obs = await agent.compare_merged(ctx, req.evidences)
+        obs = await agent.compare_merged(ctx, req.evidences, rules=req.rules, model_id=req.model_id)
         return {"observation": obs, "agent": agent.name, "log": ctx.log}
 
     @app.post("/run")

@@ -1,236 +1,168 @@
 # Argus — Agentic Inspection Architecture
 
-**Document version:** 0.9 · 02 November 2026  
+**Document version:** 1.0 · 03 November 2026 (supersedes 0.9 of 02 Nov)  
 **Repository:** `argus`  
-**Functional contract:** `argus/SPEC.md` — Feature Specification v0.9  
-**Related:** `argus/TECH_STACK.md` v0.9; `argus-simulator/TECH_STACK.md` v0.9  
-**Status:** Architecture for implementation; not a claim that the inspection tooling has been validated on physical equipment.
+**Functional contract:** `docs/specs/Argus_Spec.md` — Feature Specification v0.9  
+**Related:** `docs/architecture/Argus_Tech_Stack.md` v1.0; PRD-07 (coordinator), PRD-10 (SAM routing); `argus_simulation` Simulator spec  
+**Status:** Describes the implemented architecture; not a claim that the inspection tooling has been validated on physical equipment.
 
 ## 1. The capability being demonstrated
 
-Argus performs **order-specific visual and geometric inspection** of a unique/high-value ETO assembly while evidence arrives. It begins with the actual **48-inch CVS 6000D swing-check-valve STEP assembly** plus numbered approved work-order/inspection instructions, then progressively correlates:
+Argus performs **order-specific visual and geometric inspection** of a unique/high-value ETO assembly while evidence arrives. It begins with the registered **48-inch CVS 6000D swing-check-valve CAD** (`cad_models.json`), the indexed rule library and, when uploaded, the customer's work order, then progressively correlates:
 
-- camera video segments and **actual** frames/capture times;
-- close-up photographs and component appearances;
-- 3D laser point-cloud geometry, with explicit frames/units/calibration/registration quality;
-- the original CAD's verified feature identifiers and applicable work-order rules.
+- camera video segments (sampled keyframes) and close-up photographs;
+- SAM 3.1 component detections (boxes + masks) on those images;
+- 3D laser point-cloud chunks merged and registered to a reference cloud derived from the CAD;
+- the session's **pinned rule snapshot**, including the numbered rules printed in the work order.
 
-The system's value is avoiding expensive misses and rework while creating a defensible inspection dossier. The MVP does **not** autonomously operate a gantry, inspect X-ray/CT, measure bolt torque, test pressure, infer subsurface crack depth from surface photos or use acoustic analysis.
+The value is avoiding expensive misses and rework while creating a defensible inspection dossier. The MVP does **not** operate a gantry, inspect X-ray/CT, measure bolt torque, test pressure, infer subsurface crack depth from surface photos or use acoustic analysis.
 
-## 2. Agentic boundary: one coordinator, several tools
+## 2. Agentic boundary: an orchestrator with media sub-agents, one deterministic gate
 
-**Exactly one bounded Inspection Coordinator** maintains session-specific feature/rule context and selects computational tools on meaningful evidence events. It can: identify candidate feature/rule associations, select visual/geometry processing, request further checks if available, and revise a hypothesis when new evidence arrives.
+At the user's direction (02 Nov, cycles 3–4) the original "one coordinator, tools are not personas" design was replaced in the execution layer by an **orchestrator with independent media sub-agents**, each its own HTTP service that can crash and restart alone. What did **not** change: **no agent issues verdicts**. Every rule status comes from one deterministic gate (`coordinator.evaluate_rule`) over typed observations.
 
-It **cannot**: change the approved rule snapshot; invent a numerical tolerance, quote, CAD anchor or finding; access Simulator ground truth; rewrite received bytes; close sessions autonomously; assign production release approval.
+| Component | Where | Type | Responsibility |
+|---|---|---|---|
+| Rule indexer + session selector | API `rules.ts` | Deterministic, versioned | Index `src/inspection_rules/*.md` + `rule-metadata.json` into `rule-library.json`; select library → valve type (family/subtype/ends) → evaluable + order rules; pin the result per session |
+| Order-document reader | Python `documents.py` | Deterministic parser | pypdf/OOXML text; extract only rules printed with an ID (WO-R01…), verbatim, with page/evidence/severity |
+| Analysis queue | API `analysis.ts` | Bounded scheduler | One job per accepted photo / sampled video segment, one coalesced merged-scan job per session; drain or cancel on closure |
+| Orchestrator (planner) | Python `agents.Orchestrator`, :8100 | Agent | Associate evidence → worklist tasks, call SAM, route rules, dispatch task envelopes to sub-agents in parallel, retry, log under the session |
+| SAM component detection + routing | `meta_adapter.detect_components`, `visual_routing.py` | Model + deterministic table | SAM 3.1 says which configured components are visible; the routing table says which pinned rules those components allow (PRD-10) |
+| ImageAgent / VideoAgent | :8102 / :8101 | Sub-agents (Meta models) | Muse Spark 1.3 screening per routed rule (Tier 1); Muse Wonder 1.0 review of flagged/critical photos (Tier 2); observations only |
+| PointCloudAgent | :8103 | Sub-agent (Open3D) | Merge all chunks, ICP-register to the model's CAD reference cloud; fitness, coverage, RMS/mean/p95 deviation |
+| Rule & quality gate | `coordinator.py` | Deterministic | Verdict per rule from observations; registration gate (fitness, coverage); approved scan thresholds; severity caps |
+| ReportAgent + dossier renderer | Python / API | Aggregation / template | Outcome aggregation; frozen HTML dossier at operator closure |
 
-| Component | Type | Responsibility |
-|---|---|---|
-| Inspection Coordinator | **One bounded tool-using agent** | Select relevant worklist items/tools and maintain evidence context per feature/rule |
-| Reference Pack + Rule Selector | Deterministic/versioned service | Pin original STEP, work order and indexed numbered rules; library → valve type → order applicability; expose selection reasons |
-| Video/Photo Analysis Tool | Meta Muse Spark 1.3 adapter | Visual observations grounded in an actual segment/image and quoted rule; can return unknown/occluded |
-| Component Segmentation Tool | Meta SAM 3.1 adapter | Object boxes/masks/tracks; separate from defect verdict; optional when useful |
-| CAD/Point-Cloud Tool | Python Open Cascade/Open3D | Validate frames/units/pose; register cloud to CAD; quantify feature deviations, residuals, coverage/uncertainty |
-| Evidence Correlator | Deterministic typed service | Merge source-specific observations by feature, rule, region, timestamp and verified transform; preserve disagreements |
-| Rule & Quality Gate | Deterministic rules engine | Assess modality adequacy, approved thresholds, precision, evidence coverage and rule status |
-| Dossier Renderer | Template service | Frozen HTML dossier on operator closure; exact rule citations/evidence IDs, complete or partial |
-
-No separate Planner Agent / Fusion Agent / Reporting Agent persona is required. **Calling tools based on emerging evidence** is the only agentic dimension being claimed; the rest is explicit engineering.
+It **cannot**: change a pinned rule snapshot; invent a numerical tolerance, quote, CAD anchor or finding; access Simulator ground truth; rewrite received bytes; close sessions; assign production release approval.
 
 ## 3. Architecture and bounded data flows
 
 ```mermaid
 flowchart TB
-  subgraph Producer[External Evidence Producers]
+  subgraph Producer[External evidence producers]
     SIM[Argus Simulator: scheduled prepared bytes]
-    REAL[Real media client / manual upload]
+    REAL[Manual upload / real client]
   end
-  SIM --> API[Fastify API: validate / ingest]
+  SIM --> API[Fastify API: validate / ingest / 202]
   REAL --> API
-  API --> GCS[(GCS: immutable original files)]
-  API --> DB[(MongoDB: sessions, evidence, events)]
-  DB --> STREAM[SSE + resume]
-  STREAM --> WEB[React: video, photos, point cloud, CAD, timeline, findings]
-  API --> JOB[Bounded async job]
-  REF[Reference pack: original STEP, features, approved cited rules] --> COORD
-  JOB --> COORD[One Inspection Coordinator]
-  COORD --> VIS[Meta Muse Spark visual observations]
-  COORD --> SEG[Meta SAM 3.1 masks and tracking]
-  COORD --> GEO[Python CAD/Open3D measurements]
-  VIS --> FUSE[Correlate by verified feature + rule + time]
-  SEG --> FUSE
-  GEO --> FUSE
-  REF --> GATE[Rule & evidence sufficiency gate]
-  FUSE --> GATE
-  GATE --> DB
-  OP[Operator End or Terminate] --> FINAL[Seal intake + finalize / partial dossier]
-  DB --> FINAL
-  FINAL --> GCS
+  API --> GCS[(GCS: original bytes)]
+  API --> DB[(MongoDB: sessions, snapshots, evidence, observations, findings, events)]
+  DB --> SSE[SSE + Last-Event-ID resume] --> WEB[React: video, photos + SAM masks, point cloud, CAD, timeline, findings]
+  API --> Q[Analysis queue: per photo / sampled segment; coalesced merged scan]
+  SNAP[Pinned rule snapshot] --> Q
+  Q --> ORCH[Orchestrator :8100]
+  ORCH --> SAM[SAM 3.1 component detection] --> ROUTE[Routing table: components → rules]
+  ROUTE --> IMG[ImageAgent :8102 Muse Spark → Wonder]
+  ROUTE --> VID[VideoAgent :8101 Muse Spark]
+  ORCH --> PCA[PointCloudAgent :8103 Open3D ICP]
+  IMG --> GATE[Deterministic rule gate]
+  VID --> GATE
+  PCA --> GATE
+  GATE --> API
+  OP[Operator End / Terminate] --> FIN[Seal intake → drain or cancel queue → dossier]
+  FIN --> DB
 ```
 
-**Fast ingestion path:** accepted file bytes are stored and the video/photo/point-cloud panel updates **before** inference finishes. A scan chunk is shown incrementally, but count of chunks received is not physical surface coverage.
+**Fast ingestion path:** accepted bytes are stored and hashed, the evidence record and event committed, the job queued, `202` returned. Panels update before inference finishes. Chunk count is never surface coverage.
 
-**Slower analysis path:** an asynchronous job asks coordinator to inspect evidence against applicable criteria; all outputs are persisted with source IDs and limitations before any finding is emitted. `202 Accepted` means **queued, not analyzed**.
+**Live analysis path:** jobs run while the stream continues (bounded: `ANALYSIS_CONCURRENCY` visual jobs, one geometry job). Each request carries the snapshot's evaluable rules, equipment family/type, order text and rules already decided. Results are persisted with evidence IDs and limitations before any finding is emitted; findings stream over SSE.
 
-**UI stages:** Waiting, Receiving, Analyzing, Ready to Close, Finalizing. Receiving and analyzing may overlap; on a closed session the same evidence and timeline are read-only. The simulator has **no authority** to close the inspection.
+**UI stages:** Waiting, Receiving, Analyzing (jobs pending), Ready to Close (producer complete and queue empty), Finalizing. On a closed session the same evidence and timeline are read-only. The Simulator cannot close an inspection.
 
-## 4. Rule selection and evidence worklist
+## 4. Rule selection, snapshot and worklist
 
-**At session creation:**
+At session creation:
 
-1. Validate required name; select the prepared demo asset reference (single reference pack for MVP) and optional customer/work-order document.
-2. Pin original STEP hash, GLB, verified CAD feature map, rule index revision and source document hashes. Preserve a version-pinned quote/page/section for every rule.
-3. Select rules by (a) actual rule-library entries, (b) valve type/connection/verified configuration, (c) effective customer or demo work order. Publish dynamic counts and per-rule **Why these rules** rationales.
-4. Make a worklist of applicable `ruleId ↔ featureId ↔ expected evidence modalities` and initial `NOT_INSPECTED` states. Keep `REFERENCE_ONLY`, inappropriate or physically unobservable rules separately; don't imply they passed.
-5. Display CAD and `WAITING` while awaiting evidence; no fake observation or fabricated progress.
+1. Validate the name; resolve the CAD model (`family`, `type`, `end_connection`, hash) from `cad_models.json`.
+2. If a customer specification / work order is uploaded, store it and extract its printed rules (PRD-03). Narrative text never becomes a criterion.
+3. Select: **library** (all indexed rules) → **match valve type** (equipment metadata vs model; for the demo every rule document counts as one manufacturer's set, narrowing only from rule text) → **match customer specification** (rules evaluable from photos, video or scan + the order's evaluable rules). Record counts and reasons.
+4. **Pin** the snapshot (`ref-<id>-r<n>`, sha256 of the rules, library revision). Every analysis, citation, dossier and report reads the snapshot. While WAITING an order may be attached (revision 2); after the first evidence it is frozen.
+5. Show CAD and `WAITING`; no fake observation or progress.
 
-A model may **propose** candidate applicability, but only approved/curated or deterministically mapped criteria can become binding. Bare CAD dimensions do **not** establish an acceptable manufacturing tolerance.
+A model may never propose binding rules. Numeric thresholds exist only in rule metadata with an approval record (the DEMO_ONLY scan rules GEO-001…003).
 
 ## 5. Inspection decision loop
 
 ```text
-On accepted evidence event E:
-  1. Confirm immutable evidence ID, event ID, source sequence, file hash,
-     capture/arrival time, modality and synthetic/real provenance.
-  2. Identify candidate CAD feature(s) using genuine visual recognition,
-     known media metadata or verified scan pose; record uncertainty.
-  3. Find active approved rule(s) whose feature/evidence requirements match.
-  4. Select necessary tool(s), not every model for every media chunk:
-        photo/video: Muse Spark observation on actual bytes/crops;
-                     SAM when box/mask/track improves localization;
-        pointcloud:  Open3D geometry registration + bounded measurements.
-  5. Normalize results to typed observations with model/tool version,
-     evidence IDs, region/frame reference and available limitations.
-  6. Correlate by feature+rule+physical frame+time without conflating
-     pixels, millimetres, unknown poses or independent defect types.
-  7. Apply deterministic applicability, evidence-sufficiency and
-     approved-criterion predicates; choose ruleStatus or leave unknown.
-  8. Save immutable observation and versioned finding; emit ordered SSE
-     observation/finding/rule/coverage events. Update totals and annotation.
-  9. Re-evaluate a related rule when new evidence materially changes it;
-     keep prior finding revisions. Remain open until operator closes.
+On accepted evidence E (photo, or 1 video segment in VIDEO_ANALYSIS_EVERY):
+  1. Queue job visual:E (deduplicated); point-cloud chunk -> (re)queue geometry:<session>.
+  2. Orchestrator: associate E with snapshot tasks by modality.
+  3. SAM 3.1: one concept per relevant component, in parallel, cached;
+     store a segmentation observation (boxes, masks, confidence).
+  4. Route: detected components -> allowed rules; record-needing rules
+     skipped, or INSUFFICIENT_EVIDENCE if critical; order document
+     satisfies 'document' needs; video skips rules already decided.
+  5. Screen each routed rule on the downscaled still (keyframe for video;
+     clip only for motion rules 8.2-8.4) with Muse Spark; Muse Wonder
+     reviews flagged/critical photos. Observation schema is enum-validated.
+  6. Gate: component_present/observed -> PASS; component_absent/observed ->
+     FAIL (capped to WARNING when the rule prints WARNING); possible
+     surface line -> WARNING; anything else -> INSUFFICIENT_EVIDENCE.
+  7. Persist a finding revision (never overwrite history); stronger visual
+     verdicts are not replaced by weaker ones from another angle; emit SSE.
+On geometry job: merge all chunks -> ICP to the model's CAD reference ->
+  registration gate (fitness >= GEO_MIN_FITNESS, coverage >= GEO_MIN_COVERAGE)
+  -> scan rules decided from approved thresholds; newest merged result supersedes.
+Every write checks the session is open and the job not cancelled.
 ```
 
-**Bounded execution:** worker leases/idempotency stop repeated invocation; use timeout and retry budgets for Meta. If a model fails, mark the observation/job failed and rule `INSUFFICIENT_EVIDENCE` or leave `NOT_INSPECTED` as appropriate. Never translate a model timeout into PASS.
+**Bounded execution:** job idempotency per evidence, coalescing for geometry, Meta timeouts and retry budgets, agent retries with backoff, JobStore per (session, event, rule). Model failure leaves the rule as it was; a timeout is never a PASS.
 
 ### Specific cross-modal rules
 
-- **Hairline on machined flange in close-up:** plausible visual indication; surface scan may be nominal because it cannot resolve the indication. Record suspected surface anomaly and require review rather than claim verified crack depth or certified FAIL.
-- **Flange geometry mismatch in scan:** report deviation in millimetres only with known scan units, a validated CAD registration, resolution/uncertainty and approved threshold. If lacking, preserve the observation with `INSUFFICIENT_EVIDENCE`.
-- **Fasteners:** unfilled flange pipe-connection holes are normal when uninstalled; only identify missing bonnet fasteners where the specified bolt assembly and visible coverage support it.
-- **No detected crack:** never declare the entire body sound from one clean-looking camera frame; scope status to inspected coverage and documented detection limits.
-- **Inconsistent media:** retain contradictory observations and provenance; do not erase a suspicion to make the modalities agree.
+- **Hairline on machined flange in close-up:** `WARNING` / QC review (WO-R02 prints this cap), never certified FAIL.
+- **Flange or surface geometry from the scan:** decided only against approved thresholds, after the registration gate; else `INSUFFICIENT_EVIDENCE`.
+- **Fasteners:** unfilled flange pipe-connection holes are normal; only the bonnet bolting component routes bonnet-fastener rules.
+- **No detected crack:** scoped to the evidence that routed the rule; never "whole body sound" from one frame.
+- **Inconsistent media:** observations and provenance retained; no erasing a suspicion to make modalities agree.
 
 ## 6. Typed data contracts inside Argus
 
-**Evidence context supplied to coordinator** (example, not real physical measurements):
+**Analysis request (API → orchestrator `/analyze-evidence`):** `{sessionId, model_id, family, type, rules[] (pinned, evaluable), orderContext|null, skipRuleIds[], evidences[{eventId, evidenceId, mediaType, filename, url}]}`.
 
-```json
-{
-  "sessionId": "insp-125",
-  "evidenceId": "ev-photo-001",
-  "eventId": "img-0001",
-  "sourceId": "camera-photos-01",
-  "mediaType": "photo",
-  "relativeTimeMs": 4800,
-  "synthetic": true,
-  "referenceSnapshotId": "ref-001",
-  "candidateFeatureIds": ["inlet_flange_face"],
-  "candidateRuleIds": ["WO-R03"]
-}
-```
+**Segmentation observation:** `{kind: "detections", evidenceId, model: "sam-3.1", components: [{id, prompt, boxes, objects: [{objectId, box{left,top,right,bottom}, confidence, mask{bounds, svgPath}}], width, height, error?}]}` — stored as `observations` (`kind: segmentation`).
 
-**Visual observation** (model output is provisional, does not carry PASS/FAIL):
+**Visual observation (provisional, no PASS/FAIL):** `{kind ∈ component_present|component_absent|possible_surface_line|no_component, certainty ∈ observed|suspected|unknown, notes, model, ruleId, evidenceId, review?}`; `ruleStatus` is added by the gate.
 
-```json
-{
-  "observationId": "obs-001",
-  "evidenceIds": ["ev-photo-001"],
-  "featureId": "inlet_flange_face",
-  "kind": "possible_surface_line",
-  "regionPx": { "x": 300, "y": 180, "width": 65, "height": 18 },
-  "certainty": "suspected",
-  "measurementMm": null,
-  "model": "muse-spark-1.3",
-  "ruleId": "WO-R03"
-}
-```
+**Geometry observation:** `{kind: "geometry", units: "mm", registration: {status, fitness, surfaceCoverageFraction, rmsDeviationMm, meanDeviationMm, p95DeviationMm, transform, frameSource: "icp_cad_reference"}, ruleResults: [{ruleId, ruleStatus, threshold}]}`.
 
-**Geometry observation** (all numeric values below are **illustrative schema examples**, not values measured from this valve):
+**Finding revision:** `{findingId, revision, sessionId, ruleId, ruleStatus, evidenceIds[], reason, cadAnchor: null, at}` — `cadAnchor` stays null until a validated image↔CAD transform exists.
 
-```json
-{
-  "observationId": "obs-geom-001",
-  "evidenceIds": ["ev-scan-001"],
-  "featureId": "inlet_flange_face",
-  "registration": {
-    "status": "valid",
-    "rmseMm": 1.2,
-    "surfaceCoverageFraction": 0.65,
-    "frameSource": "verified_pose"
-  },
-  "measurement": { "metric": "local_surface_offset", "valueMm": 0.8, "uncertaintyMm": 0.4 },
-  "approvedToleranceMm": null,
-  "tool": "open3d"
-}
-```
-
-**Rule-bound finding** (all quoted text must come from pinned source; this example intentionally contains no invented quote):
-
-```json
-{
-  "findingId": "f-001",
-  "revision": 1,
-  "sessionId": "insp-125",
-  "ruleId": "WO-R03",
-  "ruleStatus": "WARNING",
-  "featureId": "inlet_flange_face",
-  "sourceSnapshotId": "ref-001",
-  "sourceCitationRef": "pinned-work-order:WO-R03",
-  "evidenceIds": ["ev-photo-001"],
-  "observationIds": ["obs-001"],
-  "reason": "Possible narrow surface indication visible in a limited close-up; qualified verification required",
-  "cadAnchor": null
-}
-```
-
-If feature coordinate is not geometrically verified, `cadAnchor=null`; use image-region highlights only. Model text does **not** create its own source quotation or approved numerical acceptance criterion.
-
-## 7. Status and event contract (must match SPEC.md)
+## 7. Status and event contract (matches the Spec)
 
 | Field | Allowed values | Interpretation |
 |---|---|---|
-| `lifecycleStatus` | `WAITING`, `RECEIVING`, `ANALYZING`, `READY_TO_CLOSE`, `FINALIZING`, `COMPLETED`, `TERMINATED` | Inspection session progress |
-| `outcome` | `PENDING`, `PASS`, `WARNING`, `FAIL`, `INCONCLUSIVE` | Overall conclusion independent of session closure |
-| `ruleStatus` | `NOT_INSPECTED`, `ANALYZING`, `PASS`, `WARNING`, `FAIL`, `INSUFFICIENT_EVIDENCE`, `NOT_APPLICABLE` | Per-rule state |
-| `deliveryStatus` | `SCHEDULED`, `SENDING`, `ACCEPTED`, `FAILED`, `NOT_SENT` | **Simulator transport only** |
+| `lifecycleStatus` | `WAITING`, `RECEIVING`, `ANALYZING`, `READY_TO_CLOSE`, `FINALIZING`, `COMPLETED`, `TERMINATED` | Session progress; ANALYZING = jobs pending |
+| `outcome` | `PENDING`, `PASS`, `WARNING`, `FAIL`, `INCONCLUSIVE` | Over the pinned applicable rules |
+| `ruleStatus` | `NOT_INSPECTED`, `ANALYZING`, `PASS`, `WARNING`, `FAIL`, `INSUFFICIENT_EVIDENCE`, `NOT_APPLICABLE` | Per rule |
+| `processingStatus` | `queued`, `processing`, `done`, `failed`, `sampled_out`, `cancelled` | Per evidence item |
+| `deliveryStatus` | `SCHEDULED`, `SENDING`, `ACCEPTED`, `FAILED`, `NOT_SENT` | Simulator transport only |
 
-Accepted/processing evidence and findings publish persisted SSE events: `inspection.created`, `evidence.received`, `evidence.processing`, `source.state`, `observation.created`, `finding.created`, `finding.updated`, `rule.progress`, `coverage.updated`, `source.complete`, `inspection.finalizing`, `inspection.closed`, `dossier.ready`, `inspection.error`. UI subscriptions reconnect with `Last-Event-ID` and reload authoritative state as needed.
+SSE events (persisted before publish, monotonic `eventSeq`): `inspection.created`, `inspection.snapshot`, `evidence.received`, `evidence.processing`, `source.state`, `observation.created`, `finding.created`, `finding.updated`, `rule.progress`, `coverage.updated`, `source.complete`, `inspection.finalizing`, `inspection.closed`, `dossier.ready`, `inspection.error`.
 
-- **Outcome aggregation:** `FAIL` if verified applicable fail; else `INCONCLUSIVE` if any mandatory applicable rule remains `NOT_INSPECTED`/`INSUFFICIENT_EVIDENCE`; else `WARNING` for verified review/warning; else `PASS` only when all required applicable rules have passed. While session is in progress, `outcome` can stay `PENDING` until sufficiently assessed. On terminate, default `INCONCLUSIVE`, retain verified FAILs prominently.
-- **`End Inspection`:** operator seals intake; accepted work drains to deadline; remaining jobs/checks are marked incomplete; freeze records and create **full HTML dossier**, then `COMPLETED` even if overall `INCONCLUSIVE`.
-- **`Terminate Now`:** operator seals intake immediately; cancels work promptly; produces **partial HTML dossier**, then `TERMINATED`; subsequent send attempts get `409 SESSION_CLOSED`.
-- **`/complete` from Simulator:** sender finished sending; Argus may move to Ready to Close when appropriate, but **never closes automatically**.
+- **End Inspection:** seal intake (`FINALIZING`, uploads 409), drain the session's queue up to `CLOSE_DRAIN_TIMEOUT_MS`, cancel and list the rest as incomplete, full dossier, `COMPLETED`.
+- **Terminate Now:** seal intake, cancel every job (aborting HTTP calls), partial dossier, `TERMINATED`, `INCONCLUSIVE` unless a verified FAIL.
+- **`/complete` from Simulator:** producer finished; the last sampled-out video segment is analysed; Argus never closes automatically.
 
 ## 8. Rule library, documents and dossier boundaries
 
-**Rule library:** indexed, source-numbered records grouped by actual categories; each has document hash, page/section, exact excerpt, applicability marker (`APPROVED / DEMO_ONLY / REFERENCE_ONLY`), modality and optional approved numerical threshold. Library count → valve-type count → work-order selected count derive from real records, not fixed `156 / 114 / 10` values.
+**Rule library:** `rule-library.json`, generated and content-versioned; categories, source document + hash, exact text, equipment applicability, modalities, `APPROVED / DEMO_ONLY / REFERENCE_ONLY`, approved thresholds with approval records.
 
-**Documents:** session-scoped list reconciles all reference docs/CAD, video/photo/scan files and generated dossier. Show real content length, capture and receipt time, source and download. Generated GLB must not be passed off as canonical STEP.
+**Documents:** per session — pinned CAD baseline, rule snapshot JSON, uploaded order document, all evidence, dossier; each downloadable with hash.
 
-**Dossier:** frozen HTML report with name/ID, closure mode, lifecycle, final outcome, rule distribution, exact source quotes, observation/evidence/timestamps, validated numeric scan metrics if present, warnings, missing coverage and referenced file hashes; downloadable from the session and Reports. PDF is optional later.
+**Dossier:** frozen HTML; outcome, closure mode, CAD + snapshot + library revision + order hashes, cascade, per-rule quote with `document · section · rule` citation and evidence, scan metrics, incomplete analysis, record-only rules, evidence register with hashes and analysis state, disclaimer.
 
 ## 9. Agentic non-goals and implementation proof
 
-- No invented acoustic, planning, NDT, robotic or release-approval agents. The coordinator has tools; tools aren't personas.
-- No scripted results packaged into simulator requests. The sender sends only real prepared file bytes and minimal transport metadata.
-- No pass from a zero-detection photo when the required region was occluded, or when a point cloud lacks valid registration.
-- No claim of physical full-surface inspection or calibrated dimensional accuracy without validated sensor setup.
-- No assumption every uploaded customer document yields an approved rule or tolerance. If applicability is unverified, expose that limitation.
+- No acoustic, NDT, robotic or release-approval agents. Sub-agents are per media type and never decide.
+- No scripted results from the Simulator; it sends only prepared bytes and transport metadata.
+- No pass from a zero-detection image, an unregistered scan, an unavailable model or a cancelled job.
+- No claim of physical full-surface inspection or calibrated accuracy beyond the stated registration metrics.
 
-**End-to-end proof:** new named session; pinned original valve STEP + source rules; simulator sends actual MP4/photo/PLY; UI receives and renders each; Muse Spark produces a source-linked observation from real content; SAM identifies one actual part; Open3D produces a source-linked metric/quality report; a rule gate evaluates or returns inconclusive; operator ends; HTML dossier survives reload. This is sufficient agentic proof for the hackathon.
+**End-to-end proof:** named session with uploaded work order → snapshot with order rules → Simulator sends real MP4/PNG/PLY → SAM masks + Muse observations on real images while streaming → merged-scan metrics decide GEO rules → operator ends → dossier with pinned citations survives reload.
 
 ## 10. Source and change control
 
-- `SPEC.md` v0.9 is the single **authoritative functional source** for screens, routes, API contracts, state codes and close semantics. If this architecture differs, correct this architecture instead of silently changing the feature requirements.
-- Meta model integrations follow official documentation: [Muse Spark](https://dev.meta.ai/models/muse-spark), [SAM 3.1](https://dev.meta.ai/docs/sam/overview), [SAM model output parser](https://dev.meta.ai/docs/sam/client-libraries). Model outputs are observations; approved rule text and measured geometry remain separately grounded.
-- Broader ETO pitch includes progressive manufacturing-stage inspection and automated sensor/gantry concepts as a long-term vision; the hackathon demonstrates **progressively received** evidence, not physical gantry control.
+- `Argus_Spec.md` v0.9 is the authoritative functional source. The orchestrator/sub-agent execution layer is a user-directed deviation from Spec §9's "one bounded coordinator" wording; the verdict boundary (one deterministic gate) is unchanged.
+- Meta model integrations follow official documentation: [Muse Spark](https://dev.meta.ai/models/muse-spark), [SAM 3.1](https://dev.meta.ai/docs/sam/overview), [SAM parser libraries](https://dev.meta.ai/docs/sam/client-libraries). Verified model IDs: `muse-spark-1.3`, `muse-wonder-1.0`, `sam-3.1`.
+- Broader ETO pitch (progressive gates, gantry automation) is long-term vision; the hackathon demonstrates progressively received evidence.

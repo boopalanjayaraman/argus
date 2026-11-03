@@ -89,20 +89,27 @@ class ImageAgent(SubAgent):
 
 def resolve_evidence_file(evidence: dict) -> str:
     """Local path for an evidence file: direct path when present, else
-    download evidence['url'] (API file endpoint) to a temp file. The agent
-    services do not share the API's data volume, so URLs are the contract."""
+    download evidence['url'] (API file endpoint) once into a cache keyed by
+    URL. The agent services do not share the API's data volume, so URLs
+    are the contract; evidence bytes are immutable, so the cache is safe."""
     path = evidence.get("path") or ""
     if path and os.path.exists(path):
         return path
     url = evidence.get("url") or ""
     if not url:
         return path
+    import hashlib
     import tempfile
     suffix = os.path.splitext(evidence.get("filename") or url.split("/")[-1] or ".ply")[1] or ".ply"
-    fd, tmp = tempfile.mkstemp(prefix="evidence-", suffix=suffix)
-    with os.fdopen(fd, "wb") as fh, urllib.request.urlopen(url, timeout=120) as resp:
-        fh.write(resp.read())
-    return tmp
+    cache = os.path.join(tempfile.gettempdir(), "argus-evidence")
+    os.makedirs(cache, exist_ok=True)
+    target = os.path.join(cache, hashlib.sha256(url.encode()).hexdigest() + suffix)
+    if not os.path.exists(target):
+        tmp = target + ".part"
+        with open(tmp, "wb") as fh, urllib.request.urlopen(url, timeout=120) as resp:
+            fh.write(resp.read())
+        os.replace(tmp, target)
+    return target
 
 
 class PointCloudAgent(SubAgent):
@@ -118,16 +125,25 @@ class PointCloudAgent(SubAgent):
         ctx.record(self.name, "completed", f"rmse={reg.get('rmseMm')} coverage={reg.get('surfaceCoverageFraction')}")
         return obs
 
-    async def compare_merged(self, ctx, evidences):
+    async def compare_merged(self, ctx, evidences, rules: list[dict] | None = None, model_id: str | None = None):
         """Merge every point-cloud chunk of the session into one scan and
-        register it against the CAD reference (coverage needs the whole)."""
+        register it against the CAD reference of the session's model
+        (coverage needs the whole). Each pinned scan rule is then decided
+        by the deterministic gate from that one geometry observation."""
         ctx.record(self.name, "started", f"merged comparison of {len(evidences)} chunks")
         paths = [resolve_evidence_file(ev) for ev in evidences]
-        reg = await asyncio.to_thread(geometry.register_merged, paths)
-        obs = {"kind": "geometry", "registration": reg,
+        cad_path = None
+        if model_id:
+            import cad_reference
+            cad_path = (await asyncio.to_thread(cad_reference.reference_for_model, model_id))["referencePly"]
+        reg = await asyncio.to_thread(geometry.register_merged, paths, cad_path)
+        obs = {"kind": "geometry", "registration": reg, "units": "mm",
                "measurement": {"valueMm": reg.get("meanDeviationMm")} if reg.get("meanDeviationMm") is not None else None,
                "tool": "open3d", "mergedChunks": reg.get("mergedChunks", 0)}
-        ctx.record(self.name, "completed", f"rmse={reg.get('rmseMm')} coverage={reg.get('surfaceCoverageFraction')} chunks={reg.get('mergedChunks')}")
+        obs["ruleResults"] = [{"ruleId": r.get("ruleId"), "ruleStatus": coordinator.evaluate_rule(r, [obs]),
+                               "threshold": r.get("threshold")} for r in (rules or [])
+                              if "pointcloud" in (r.get("modalities") or []) and r.get("threshold")]
+        ctx.record(self.name, "completed", f"rms={reg.get('rmsDeviationMm')} coverage={reg.get('surfaceCoverageFraction')} chunks={reg.get('mergedChunks')}")
         return obs
 
 
@@ -174,11 +190,11 @@ class JobStore:
             open(self.path, "w").write(json.dumps(self.jobs, indent=1))
 
     @staticmethod
-    def _key(session_id: str, evidence: dict) -> str:
-        return f"{session_id}:{evidence.get('eventId', '')}"
+    def _key(session_id: str, evidence: dict, rule: dict | None = None) -> str:
+        return f"{session_id}:{evidence.get('eventId', '')}:{(rule or {}).get('ruleId', '')}"
 
     def enqueue(self, ctx: InspectionContext, evidence: dict, rule: dict) -> str:
-        key = self._key(ctx.session_id, evidence)
+        key = self._key(ctx.session_id, evidence, rule)
         if key not in self.jobs:
             self.jobs[key] = {"sessionId": ctx.session_id, "evidence": evidence, "rule": rule, "state": "PENDING", "attempts": 0}
             self._save()
@@ -290,52 +306,70 @@ class Orchestrator:
         """Independent events (video/image/pointcloud, any mix) run in parallel."""
         return await asyncio.gather(*(self.dispatch_one(ctx, ev, rule) for ev, rule in items))
 
-    async def dispatch_evidence(self, ctx: InspectionContext, evidences: list[dict], worklist: dict) -> list[dict]:
+    async def dispatch_evidence(self, ctx: InspectionContext, evidences: list[dict], worklist: dict,
+                                family: str | None = None, type: str | None = None,
+                                order_context: str | None = None, skip_rule_ids: list[str] | None = None) -> list[dict]:
         """SAM-routed dispatch: for each photo/video, SAM 3.1 detects which
         components are present, then the deterministic visual-routing
-        mapping for the equipment family/type (visual_routing.select_rules)
-        picks which applicable rules may be applied to that evidence.
-        Rules routed to components that are not visible are not applied;
-        rules needing evidence outside the image are skipped unless
-        critical, in which case they are returned as
+        mapping for the session's equipment family/type
+        (visual_routing.select_rules) picks which applicable rules may be
+        applied to that evidence. Rules routed to components that are not
+        visible are not applied; rules needing evidence outside the image
+        are skipped unless critical, in which case they are returned as
         INSUFFICIENT_EVIDENCE (evidence needed) without being screened.
-        No task -> logged as unassociated, never silently analysed
-        against an invented rule."""
+        With an order document, `document` needs are met and the order
+        text travels with the rule. Rules already decided by earlier
+        evidence (skip_rule_ids, video only) are not re-screened.
+        Each photo/video also yields one `detections` observation carrying
+        SAM's boxes and masks. No task -> logged as unassociated, never
+        silently analysed against an invented rule."""
         import worklist as wl
         import visual_routing as vr
         jobs: list[tuple[dict, dict]] = []
-        evidence_needed: list[dict] = []
+        extra: list[dict] = []
+        skip = set(skip_rule_ids or [])
         for ev in evidences:
             tasks = wl.associate(ev, worklist)
             if not tasks:
                 ctx.record("orchestrator", "unassociated", f"{ev.get('eventId')}: no worklist task for {ev.get('mediaType')}")
                 continue
+            mapping = None
             if ev.get("mediaType") in ("photo", "video"):
                 source = "video" if ev.get("mediaType") == "video" else "photo"
-                mapping = vr.get_mapping(ev.get("family") or vr.DEFAULT_FAMILY,
-                                         ev.get("type") or vr.DEFAULT_TYPE)
+                mapping = vr.get_mapping(ev.get("family") or family or "", ev.get("type") or type or "")
                 detected = ev.get("detectedComponents")
                 if detected is None:
+                    components = vr.relevant_components(mapping, tasks)
                     found = await asyncio.to_thread(
-                        meta_adapter.detect_components, resolve_evidence_file(ev), source, mapping["components"])
-                    detected = [c["id"] for c in found]
+                        meta_adapter.detect_components, resolve_evidence_file(ev), source, components)
+                    detected = [c["id"] for c in found if c.get("boxes") and not c.get("error")]
+                    extra.append({"kind": "detections", "source": source, "evidenceId": ev.get("evidenceId"),
+                                  "eventId": ev.get("eventId"), "model": meta_adapter.SAM_MODEL, "components": found})
                 ctx.record("orchestrator", "sam-detected",
                            f"{ev.get('eventId')}: {', '.join(detected) if detected else 'no components detected'}")
-                routed = vr.select_rules(tasks, list(detected), source, mapping=mapping)
+                routed = vr.select_rules(tasks, list(detected), source, mapping, order_document=bool(order_context))
                 for t in routed["skipped"]:
                     ctx.record("orchestrator", "rule-skipped", f"{ev.get('eventId')} rule {t.get('ruleId')}: {t.get('reason')}")
                 for t in routed["evidenceNeeded"]:
                     ctx.record("orchestrator", "evidence-needed", f"{ev.get('eventId')} rule {t.get('ruleId')}: {t.get('reason')}")
-                    evidence_needed.append({
+                    extra.append({
                         "kind": "evidence_needed", "source": source, "ruleId": t.get("ruleId"),
                         "ruleStatus": "INSUFFICIENT_EVIDENCE",
                         "evidenceId": ev.get("evidenceId"), "eventId": ev.get("eventId"),
                         "needs": t.get("needs", []), "notes": t.get("reason", ""),
                     })
                 tasks = routed["selected"]
+                if source == "video" and skip:
+                    for t in [t for t in tasks if t.get("ruleId") in skip]:
+                        ctx.record("orchestrator", "rule-already-decided", f"{ev.get('eventId')} rule {t.get('ruleId')}")
+                    tasks = [t for t in tasks if t.get("ruleId") not in skip]
             for task in tasks:
-                jobs.append((ev, wl.task_envelope(ctx.session_id, ev, task)["rule"]))
-        return await self.dispatch(ctx, jobs) + evidence_needed
+                rule = wl.task_envelope(ctx.session_id, ev, task)["rule"]
+                compares_order = task.get("origin") == "order" or (mapping and "document" in vr.classify_rule(task, mapping))
+                if order_context and compares_order:
+                    rule = {**rule, "orderContext": order_context}
+                jobs.append((ev, rule))
+        return await self.dispatch(ctx, jobs) + extra
 
     async def recover_pending(self, contexts: dict[str, InspectionContext]) -> list[dict]:
         """After a restart, spin the owning sub-agents back up for every

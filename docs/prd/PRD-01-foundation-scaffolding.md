@@ -1,6 +1,6 @@
 # PRD-01 — Foundation Scaffolding (Argus)
 
-Status: Implemented (v1: Fastify+React, local file storage; Mongo/GCS/Meta adapters pending) · Source: Tech Stack §§2–3 · Depends on: —
+Status: Implemented (Fastify+React; MongoDB Atlas + GCS adapters env-gated) · Source: Tech Stack §§2–3 · Depends on: —
 
 ## Specs
 

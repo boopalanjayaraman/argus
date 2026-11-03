@@ -105,6 +105,45 @@ function PointCloudCanvas({ urls, onStats, color = null, single = false }: { url
   );
 }
 
+const MASK_COLORS = ['#A594FF', '#4BE0A0', '#FFC554', '#6FD6E8', '#FF7468', '#7AB8FF', '#D5D8E4'];
+
+/** A photograph with SAM 3.1's component masks and boxes drawn over it.
+ * Coordinates are in the pixels of the still SAM saw (a uniformly scaled
+ * copy of the photo), so the overlay uses that still's viewBox. */
+function PhotoWithMasks({ sessionId, photo, src }: { sessionId: string; photo: any; src: string }) {
+  const [seg, setSeg] = useState<any>(null);
+  const [show, setShow] = useState(true);
+  useEffect(() => {
+    let live = true; setSeg(null);
+    fetch(`/api/v1/inspections/${sessionId}/observations?evidenceId=${encodeURIComponent(photo.evidenceId)}`).then(r => r.json())
+      .then(list => { if (live) setSeg((list || []).find((o: any) => o.kind === 'segmentation') || null); }).catch(() => {});
+    return () => { live = false; };
+  }, [sessionId, photo.evidenceId]);
+  const comps = (seg?.payload?.components || []).filter((c: any) => c.boxes && !c.error);
+  const dims = comps.find((c: any) => c.width && c.height);
+  return (
+    <>
+      <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%', maxHeight: '70vh', lineHeight: 0 }}>
+        <img src={src} alt={photo.filename} style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }} />
+        {show && dims && <svg viewBox={`0 0 ${dims.width} ${dims.height}`} preserveAspectRatio="none" aria-label="SAM 3.1 component masks" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+          {comps.map((c: any, ci: number) => c.objects.map((o: any) => {
+            const col = MASK_COLORS[ci % MASK_COLORS.length];
+            return <g key={`${c.id}-${o.objectId}`}>
+              {o.mask?.svgPath && <path d={o.mask.svgPath} transform={`translate(${o.mask.bounds.left} ${o.mask.bounds.top})`} fill={col} fillOpacity={0.32} />}
+              <rect x={o.box.left} y={o.box.top} width={o.box.right - o.box.left} height={o.box.bottom - o.box.top} fill="none" stroke={col} strokeWidth={Math.max(1.5, dims.width / 500)} />
+              <text x={o.box.left + 4} y={Math.max(14, o.box.top - 4)} fill={col} fontSize={Math.max(12, dims.width / 70)} fontWeight={600}>{c.id.replace(/_/g, ' ')} {o.confidence !== undefined && o.confidence !== null ? Math.round(o.confidence * 100) + '%' : ''}</text>
+            </g>;
+          }))}
+        </svg>}
+      </div>
+      <span className="ar-micro" style={{ position: 'absolute', left: 10, bottom: 10, zIndex: 3, background: '#0A0B10D9', padding: '2px 8px', borderRadius: 6 }}>
+        {!seg ? 'No SAM segmentation yet' : comps.length ? `SAM 3.1: ${comps.map((c: any) => `${c.id.replace(/_/g, ' ')} (${c.boxes})`).join(' · ')}` : 'SAM 3.1: no configured component detected'}
+      </span>
+      {!!comps.length && <button type="button" className="ar-btn secondary sm" style={{ position: 'absolute', right: 10, bottom: 10, zIndex: 3 }} onClick={() => setShow(!show)}>{show ? 'Hide masks' : 'Show masks'}</button>}
+    </>
+  );
+}
+
 export default function ViewerDialog({ viewer, sessionId, photos, videos, pcs, cadUrl, onClose, onPhoto }: {
   viewer: Viewer;
   sessionId: string;
@@ -151,7 +190,7 @@ export default function ViewerDialog({ viewer, sessionId, photos, videos, pcs, c
 
         {viewer.kind === 'photo' && photos[viewer.index] && (
           <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07080C', borderRadius: 8, overflow: 'hidden' }}>
-            <img src={fileUrl(photos[viewer.index])} alt={photos[viewer.index].filename} style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain' }} />
+            <PhotoWithMasks sessionId={sessionId} photo={photos[viewer.index]} src={fileUrl(photos[viewer.index])} />
             {photos.length > 1 && <>
               <button type="button" className="ar-btn secondary sm" style={{ position: 'absolute', left: 10, top: '50%' }} disabled={viewer.index === 0} onClick={() => onPhoto(viewer.index - 1)}>‹ Prev</button>
               <button type="button" className="ar-btn secondary sm" style={{ position: 'absolute', right: 10, top: '50%' }} disabled={viewer.index === photos.length - 1} onClick={() => onPhoto(viewer.index + 1)}>Next ›</button>

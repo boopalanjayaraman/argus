@@ -1,280 +1,33 @@
 {
-  "version": 2,
-  "purpose": "Deterministic routing from detected components to the visual rules that may be applied to one photo or video, for any equipment family and type. SAM 3.1 detects components; the mapping for the equipment's family/type decides rules. A rule that needs information outside the image is never screened against that image: it is skipped, unless it is critical, in which case it is reported as INSUFFICIENT_EVIDENCE (evidence needed). Add a new entry to mappings to support another family/type.",
+  "version": 3,
+  "purpose": "Deterministic routing from detected components to the visual rules that may be applied to one photo or video. One mapping per equipment family; the family's subtypes are listed together in `types`, and a component that exists only on some subtypes lists them in its own `types` (absent = all subtypes of the family). SAM 3.1 detects components; this file decides rules. A rule that needs information outside the image is never screened against that image: it is skipped, unless it is critical, in which case it is reported as INSUFFICIENT_EVIDENCE (evidence needed). An uploaded customer specification / work order satisfies the `document` need: those rules are screened against the order text. An equipment family/type with no mapping is refused, never routed with another family's mapping.",
   "mappings": [
     {
       "family": "Valve",
-      "type": "ball",
+      "types": ["ball", "gate", "globe", "swing_check", "butterfly", "plug", "control", "regulator"],
       "components": [
-        {
-          "id": "flange_face",
-          "samPrompt": "flange face",
-          "sections": [
-            "Flanged Ends"
-          ],
-          "ruleCodes": [
-            "4.1",
-            "4.2",
-            "4.3",
-            "4.4",
-            "4.5",
-            "4.6",
-            "4.7"
-          ]
-        },
-        {
-          "id": "nameplate",
-          "samPrompt": "metal nameplate",
-          "sections": [
-            "Identification and Marking",
-            "Nameplate and Tagging"
-          ],
-          "ruleCodes": [
-            "2.7",
-            "2.8",
-            "2.9",
-            "NP-001",
-            "NP-002",
-            "NP-003",
-            "NP-004",
-            "NP-005",
-            "NP-006",
-            "NP-007",
-            "NP-008",
-            "NP-009",
-            "NP-010",
-            "NP-011",
-            "NP-012",
-            "TAG-001",
-            "CRN-001"
-          ]
-        },
-        {
-          "id": "body_markings",
-          "samPrompt": "raised cast letters on valve body",
-          "sections": [
-            "Identification and Marking"
-          ],
-          "ruleCodes": [
-            "2.1",
-            "2.2",
-            "2.3",
-            "2.4",
-            "2.5",
-            "2.6",
-            "2.10"
-          ]
-        },
-        {
-          "id": "body_casting",
-          "samPrompt": "valve body casting",
-          "sections": [
-            "Pressure-Boundary Castings and Forgings"
-          ],
-          "ruleCodes": [
-            "3.1",
-            "3.2",
-            "3.3",
-            "3.4",
-            "3.5",
-            "3.6"
-          ]
-        },
-        {
-          "id": "bonnet_bolting",
-          "samPrompt": "bolts on valve bonnet",
-          "sections": [
-            "Internals, Seats and Obturator",
-            "Assembly and Operability"
-          ],
-          "ruleCodes": [
-            "7.6",
-            "8.5",
-            "9.3"
-          ]
-        },
-        {
-          "id": "actuator",
-          "samPrompt": "valve actuator",
-          "sections": [
-            "Assembly and Operability",
-            "Condition Before Delivery / Dispatch"
-          ],
-          "ruleCodes": [
-            "8.1",
-            "8.2",
-            "8.3",
-            "8.5",
-            "10.5"
-          ]
-        },
-        {
-          "id": "handwheel",
-          "samPrompt": "valve handwheel",
-          "sections": [
-            "Assembly and Operability"
-          ],
-          "ruleCodes": [
-            "8.1",
-            "8.2",
-            "8.3"
-          ]
-        },
-        {
-          "id": "bore_internals",
-          "samPrompt": "valve bore",
-          "sections": [
-            "Internals, Seats and Obturator",
-            "Butt-Weld Ends"
-          ],
-          "ruleCodes": [
-            "7.1",
-            "7.2",
-            "7.3",
-            "7.4",
-            "7.5",
-            "7.7",
-            "5.2"
-          ]
-        },
-        {
-          "id": "weld_end",
-          "samPrompt": "weld bevel pipe end",
-          "sections": [
-            "Butt-Weld Ends"
-          ],
-          "ruleCodes": [
-            "5.1",
-            "5.2",
-            "5.3",
-            "5.4"
-          ]
-        },
-        {
-          "id": "threaded_end",
-          "samPrompt": "threaded pipe end",
-          "sections": [
-            "Threaded and Socket-Weld Ends"
-          ],
-          "ruleCodes": [
-            "6.1",
-            "6.2",
-            "6.3",
-            "6.4"
-          ]
-        },
-        {
-          "id": "end_protector",
-          "samPrompt": "flange protector cap",
-          "sections": [
-            "Flanged Ends",
-            "Condition Before Delivery / Dispatch"
-          ],
-          "ruleCodes": [
-            "4.7",
-            "10.3",
-            "5.4",
-            "6.4"
-          ]
-        },
-        {
-          "id": "full_valve",
-          "samPrompt": "industrial ball valve",
-          "sections": [
-            "Condition Before Delivery / Dispatch",
-            "Pressure Test - Visual Acceptance",
-            "Assembly and Operability"
-          ],
-          "ruleCodes": [
-            "10.1",
-            "10.2",
-            "10.4",
-            "10.5",
-            "10.6",
-            "10.7",
-            "9.1",
-            "9.2",
-            "9.4",
-            "9.5",
-            "8.4"
-          ]
-        }
+        { "id": "flange_face", "samPrompt": "flange face", "sections": ["Flanged Ends"], "ruleCodes": ["4.1", "4.2", "4.3", "4.4", "4.5", "4.6", "4.7", "WO-R01", "WO-R02"] },
+        { "id": "nameplate", "samPrompt": "metal nameplate", "sections": ["Identification and Marking", "Nameplate and Tagging"], "ruleCodes": ["2.7", "2.8", "2.9", "NP-001", "NP-002", "NP-003", "NP-004", "NP-005", "NP-006", "NP-007", "NP-008", "NP-009", "NP-010", "NP-011", "NP-012", "TAG-001", "CRN-001", "WO-R06"] },
+        { "id": "body_markings", "samPrompt": "raised cast letters on valve body", "sections": ["Identification and Marking"], "ruleCodes": ["2.1", "2.2", "2.3", "2.4", "2.5", "2.6", "2.10"] },
+        { "id": "body_casting", "samPrompt": "valve body casting", "sections": ["Pressure-Boundary Castings and Forgings"], "ruleCodes": ["3.1", "3.2", "3.3", "3.4", "3.5", "3.6", "WO-R05"] },
+        { "id": "bonnet_bolting", "samPrompt": "bolts on valve bonnet", "sections": ["Internals, Seats and Obturator", "Assembly and Operability"], "ruleCodes": ["7.6", "8.5", "9.3", "WO-R03"] },
+        { "id": "actuator", "samPrompt": "valve actuator", "types": ["ball", "gate", "globe", "butterfly", "plug", "control", "regulator"], "sections": ["Assembly and Operability", "Condition Before Delivery / Dispatch"], "ruleCodes": ["8.1", "8.2", "8.3", "8.5", "10.5"] },
+        { "id": "handwheel", "samPrompt": "valve handwheel", "types": ["ball", "gate", "globe", "butterfly", "plug"], "sections": ["Assembly and Operability"], "ruleCodes": ["8.1", "8.2", "8.3"] },
+        { "id": "lever_weight", "samPrompt": "lever arm with counterweight", "types": ["swing_check"], "sections": ["Assembly and Operability"], "ruleCodes": ["8.1", "8.3", "8.4", "WO-R04"] },
+        { "id": "air_cushion", "samPrompt": "pneumatic cylinder", "types": ["swing_check"], "sections": ["Assembly and Operability"], "ruleCodes": ["8.1", "8.5", "WO-R04"] },
+        { "id": "bore_internals", "samPrompt": "valve bore", "sections": ["Internals, Seats and Obturator", "Butt-Weld Ends"], "ruleCodes": ["7.1", "7.2", "7.3", "7.4", "7.5", "7.7", "5.2"] },
+        { "id": "weld_end", "samPrompt": "weld bevel pipe end", "sections": ["Butt-Weld Ends"], "ruleCodes": ["5.1", "5.2", "5.3", "5.4"] },
+        { "id": "threaded_end", "samPrompt": "threaded pipe end", "sections": ["Threaded and Socket-Weld Ends"], "ruleCodes": ["6.1", "6.2", "6.3", "6.4"] },
+        { "id": "end_protector", "samPrompt": "flange protector cap", "sections": ["Flanged Ends", "Condition Before Delivery / Dispatch"], "ruleCodes": ["4.7", "10.3", "5.4", "6.4"] },
+        { "id": "full_valve", "samPrompt": "industrial valve", "sections": ["Condition Before Delivery / Dispatch", "Pressure Test - Visual Acceptance", "Assembly and Operability"], "ruleCodes": ["10.1", "10.2", "10.4", "10.5", "10.6", "10.7", "9.1", "9.2", "9.4", "9.5", "8.4", "WO-R05"] }
       ],
-      "criticalRuleCodes": [
-        "NP-001",
-        "NP-002",
-        "TAG-001",
-        "3.1",
-        "4.3",
-        "7.2",
-        "9.1",
-        "9.2",
-        "9.3",
-        "9.5"
-      ],
+      "criticalRuleCodes": ["NP-001", "NP-002", "TAG-001", "3.1", "4.3", "7.2", "9.1", "9.2", "9.3", "9.5", "WO-R01", "WO-R03", "WO-R06"],
       "externalRequirementPatterns": {
-        "document": [
-          "matches PO",
-          "matches certificate",
-          "MTC",
-          "work order",
-          "datasheet",
-          "GA drawing",
-          "certificate",
-          "traceable",
-          "correspond",
-          "equal work order",
-          "must be in:",
-          "must match",
-          "known values",
-          "if applicable",
-          "destination",
-          "specified in PO"
-        ],
-        "measurement": [
-          "Ra ",
-          "dia",
-          "PCD",
-          "below B16.34 minimum",
-          "dimensionally",
-          "Cv",
-          "numeric inches"
-        ],
-        "testRecord": [
-          "test performed",
-          "for hold time",
-          "after test",
-          "leakage",
-          "No visible leakage",
-          "full travel",
-          "open-close",
-          "swings freely",
-          "operation"
-        ]
+        "document": ["matches PO", "matches certificate", "MTC", "work order", "datasheet", "GA drawing", "certificate", "traceable", "correspond", "equal work order", "must be in:", "must match", "known values", "if applicable", "destination", "specified in PO"],
+        "measurement": ["Ra ", "dia", "PCD", "below B16.34 minimum", "dimensionally", "Cv", "numeric inches"],
+        "testRecord": ["test performed", "for hold time", "after test", "leakage", "No visible leakage", "full travel", "open-close", "swings freely", "operation"]
       },
-      "visualOverrideCodes": [
-        "NP-001",
-        "2.7",
-        "3.1",
-        "3.2",
-        "3.3",
-        "3.6",
-        "4.3",
-        "4.4",
-        "4.6",
-        "4.7",
-        "5.3",
-        "6.1",
-        "6.3",
-        "7.1",
-        "7.2",
-        "7.3",
-        "7.5",
-        "7.7",
-        "10.1",
-        "10.2",
-        "10.4"
-      ]
+      "visualOverrideCodes": ["NP-001", "2.7", "3.1", "3.2", "3.3", "3.6", "4.3", "4.4", "4.6", "4.7", "5.3", "6.1", "6.3", "7.1", "7.2", "7.3", "7.5", "7.7", "10.1", "10.2", "10.4", "WO-R02", "WO-R05"]
     }
   ]
 }

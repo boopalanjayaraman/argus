@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "purpose": "Indexing metadata for src/inspection_rules/*.md, applied by the rule indexer (npm run index:rules). Per document: library stage, evidence type and the equipment it covers. Per rule: narrowing that the rule's own text states (valve subtypes, end connections) and approved numeric thresholds for scan rules. All rule documents are treated as one manufacturer's rule set for the demo; equipment narrowing comes only from the rule text, never from the document's product series. Thresholds appear only with an approval record.",
+  "evidenceModalities": {
+    "Photo or video": ["photo", "video"],
+    "3D scan": ["pointcloud"],
+    "Measurement": [],
+    "Functional test": [],
+    "Work order record": []
+  },
+  "defaultEquipment": { "family": "Valve", "types": ["*"], "endConnections": ["*"] },
+  "documents": {
+    "ASME_B16_Valve_Visual_Inspection_Checklist.md": { "stage": "Visual Inspection", "evidence": "Photo or video" },
+    "inspection_01_nameplate_and_tagging.md": { "stage": "Identification", "evidence": "Photo or video" },
+    "inspection_09_cad_scan_conformance.md": { "stage": "Visual Inspection", "evidence": "3D scan", "applicability": "DEMO_ONLY" },
+    "inspection_00_agent_contract.md": { "stage": "Global Rules", "evidence": "Work order record" },
+    "inspection_02_cv_validation.md": { "stage": "Functional Testing", "evidence": "Work order record" },
+    "inspection_03_test_regulators_2111_2114.md": { "stage": "Functional Testing", "evidence": "Functional test" },
+    "inspection_04_test_regulator_2392.md": { "stage": "Functional Testing", "evidence": "Functional test" },
+    "inspection_05_test_regulator_2412.md": { "stage": "Functional Testing", "evidence": "Functional test" },
+    "inspection_06_test_control_valves_class_iv_vi.md": { "stage": "Functional Testing", "evidence": "Functional test" },
+    "inspection_07_checklists_and_release_gates.md": { "stage": "Release Gates", "evidence": "Work order record" },
+    "inspection_08_ambiguities_and_blockers.md": { "stage": "Global Rules", "evidence": "Work order record" },
+    "assembly_01_torque_procedure.md": { "stage": "Assembly", "evidence": "Measurement" },
+    "assembly_02_torque_3241_3244_3248.md": { "stage": "Assembly", "evidence": "Measurement" },
+    "assembly_03_torque_3251_3253_3254_3256.md": { "stage": "Assembly", "evidence": "Measurement" },
+    "assembly_04_torque_regulators.md": { "stage": "Assembly", "evidence": "Measurement" },
+    "assembly_05_sequence_3241.md": { "stage": "Assembly", "evidence": "Work order record" },
+    "assembly_06_sequence_3244.md": { "stage": "Assembly", "evidence": "Work order record" },
+    "assembly_07_sequence_regulators_2392_2412.md": { "stage": "Assembly", "evidence": "Work order record" },
+    "assembly_08_sequence_3510_series1a.md": { "stage": "Assembly", "evidence": "Work order record" }
+  },
+  "rules": {
+    "2.6": { "types": ["globe", "swing_check", "control", "regulator"], "why": "Flow arrow is required on globe, check and unidirectional valves (rule text)." },
+    "8.4": { "types": ["swing_check"], "why": "Disc swing applies to check valves only (rule text)." },
+    "4.1": { "endConnections": ["flanged"] },
+    "4.2": { "endConnections": ["flanged"] },
+    "4.3": { "endConnections": ["flanged"] },
+    "4.4": { "endConnections": ["flanged"] },
+    "4.5": { "endConnections": ["flanged"] },
+    "4.6": { "endConnections": ["flanged"] },
+    "4.7": { "endConnections": ["flanged"] },
+    "5.1": { "endConnections": ["butt_weld"] },
+    "5.2": { "endConnections": ["butt_weld"] },
+    "5.3": { "endConnections": ["butt_weld"] },
+    "5.4": { "endConnections": ["butt_weld"] },
+    "6.1": { "endConnections": ["threaded", "socket_weld"] },
+    "6.2": { "endConnections": ["threaded", "socket_weld"] },
+    "6.3": { "endConnections": ["threaded", "socket_weld"] },
+    "6.4": { "endConnections": ["threaded", "socket_weld"] },
+    "GEO-001": {
+      "threshold": [{ "metric": "fitness", "min": 0.9 }, { "metric": "surfaceCoverageFraction", "min": 0.8, "unit": "fraction" }],
+      "onFail": "INSUFFICIENT_EVIDENCE",
+      "approval": { "by": "project owner", "on": "2026-11-03", "scope": "DEMO_ONLY" }
+    },
+    "GEO-002": {
+      "prerequisites": [{ "metric": "fitness", "min": 0.9 }, { "metric": "surfaceCoverageFraction", "min": 0.8 }],
+      "threshold": { "metric": "rmsDeviationMm", "max": 3.0, "unit": "mm" },
+      "approval": { "by": "project owner", "on": "2026-11-03", "scope": "DEMO_ONLY" }
+    },
+    "GEO-003": {
+      "prerequisites": [{ "metric": "fitness", "min": 0.9 }, { "metric": "surfaceCoverageFraction", "min": 0.8 }],
+      "threshold": { "metric": "p95DeviationMm", "max": 6.0, "unit": "mm" },
+      "approval": { "by": "project owner", "on": "2026-11-03", "scope": "DEMO_ONLY" }
+    }
+  }
+}

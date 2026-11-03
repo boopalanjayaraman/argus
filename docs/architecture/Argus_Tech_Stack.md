@@ -1,6 +1,6 @@
 # Argus — Technology Stack & Deployment Design
 
-**Document version:** 0.9 · 02 November 2026  
+**Document version:** 1.0 · 03 November 2026 (updated to the implementation)  
 **Repository:** `argus`  
 **Authoritative functional contract:** `argus/SPEC.md` — Argus Feature Specification v0.9  
 **Companion:** `argus/AGENTIC_ARCHITECTURE.md` v0.9; independent `argus-simulator/TECH_STACK.md` v0.9  
@@ -26,12 +26,14 @@ Argus is a **CAD- and order-specific, progressively updating inspection workbenc
 | Imaging/clip preparation | OpenCV + FFmpeg | Validate/prepare frames/crops from actual MP4; preserve source timestamps, avoid redundant inference |
 | STEP conversion | Open Cascade via OCP/CadQuery, offline/preload | Canonical STEP, GLB mesh, stable feature IDs, feature-frame mapping; inspect actual reference pack metadata |
 | Geometry tools | Open3D + NumPy + SciPy | Load point chunks, coordinate/units checks, registration, per-feature deviations, quality and coverage |
-| Multimodal reasoning | Meta Model API `muse-spark-1.3` | Rule-aware photo/video interpretation; structured, evidence-linked observations; bounded tool decisions |
-| Component localization | Meta Model API `sam-3-1` | Segment/track selected visible valve components; masks and boxes, not engineering certification |
+| Multimodal reasoning | Meta Model API `muse-spark-1.3` (Tier 1 screen), `muse-wonder-1.0` (Tier 2 review) | Rule-aware photo/keyframe interpretation; enum-validated observations; never verdicts |
+| Component detection + routing | Meta Model API `sam-3.1` + `meta-sam-parser`; `visual-routing.json` | One concept per request, parallel + cached; boxes, one-bit masks (SVG paths), confidence; deterministic table maps visible components to the pinned rules they allow (PRD-10) |
+| Order documents | pypdf (layout mode), OOXML (DOCX/XLSX) | Text of the uploaded customer specification; deterministic extraction of rules printed with IDs (WO-R01…) |
+| Rule library | Offline indexer `npm run index:rules` (`rules.ts`) | `src/inspection_rules/*.md` + `rule-metadata.json` → content-versioned `rule-library.json`; per-session pinned snapshot |
 | Database | MongoDB Atlas | Sessions, references, selected rules, evidence metadata, observations, revisions, event history, dossiers |
 | Object storage | Google Cloud Storage | Immutable media bytes, source/reference snapshots, GLB, derived crops/masks, report HTML |
-| Browser live updates | Server-Sent Events (SSE) | Ordered events with `Last-Event-ID`, reconnect and snapshot reconciliation |
-| Background work | Bounded local queue for one-process development; **Google Cloud Tasks** for deployed worker | Decouple upload acknowledgment from inference, retry analysis idempotently; avoid relying on Cloud Run process memory |
+| Browser live updates | Server-Sent Events (SSE), consumed by the web app via `EventSource` | Ordered events with `Last-Event-ID` resume, heartbeat, 15 s reconciliation poll |
+| Background work | In-process bounded `AnalysisQueue` in the API (per-kind concurrency, coalescing, drain/cancel); restart recovery from persisted evidence state. Google Cloud Tasks remains the option for a multi-instance deployment | Decouple upload acknowledgment from inference while evidence is still arriving |
 | Hosting | React static hosting; Node and Python containers on GCP Cloud Run | Independent services, no Kubernetes requirement; private worker invocation |
 | Secrets | GCP Secret Manager / local `.env` (uncommitted) | Meta, MongoDB, GCS credentials server-side only |
 | Testing | Vitest + React Testing Library + Playwright, Node integration tests, pytest | API and SSE contracts, source provenance, geometry validation, closure/dossier correctness |
@@ -42,7 +44,8 @@ Argus is a **CAD- and order-specific, progressively updating inspection workbenc
 
 - **Tiered, agent-specific routing (updated 2026-11-03, user-approved):** Tier 1 screens *all* video segments and photographs with the fast multimodal model (`META_SCREEN_MODEL`, default `muse-spark-1.3`); VideoAgent never escalates per segment. Tier 2 reviews *only* flagged/high-stakes photographs with the flagship reasoning model (`META_REVIEW_MODEL`, default `muse-wonder` — confirm the exact id and its multimodal/structured-output support on the account at smoke-test time; do not assume a version string). Escalation is deterministic (`meta_adapter.needs_review`: suspected indication, low/unknown certainty, or critical feature — flange faces, nameplate, bonnet, body), never model self-selection. The review is an additional observation; verdicts remain the deterministic rule gate. Point-cloud geometry, rule evaluation, and dossier numbers are never routed to any model.
 - For new runtime development target Meta's documented **`muse-spark-1.3`** for the screening tier, not a model-generated measurement engine. Supply only relevant approved rule text, actual images/selected clips and existing candidate feature IDs. Parse to a restricted observation schema and validate it in Python.
-- Use **`sam-3-1`** via Meta Model API for *specific* target components when ROI localization, mask or tracking adds value. Meta's Responses API and optional `meta_sam_parser` can parse segmentation output. SAM does not by itself detect a crack or measure a tolerance.
+- Use **`sam-3.1`** (verified id) via the Responses API, streaming, `metadata: {include_confidence: "true", mask_encoding: "one_bit"}`, one concept per request; parse with Meta's `meta-sam-parser` (`parse_responses_stream`, `decode_mask_to_svg_path`). SAM decides which components are visible and therefore which pinned rules are routed to an image; it never detects a defect or measures a tolerance. A live concept request took ~80 s (03 Nov 2026), so concepts run in parallel (`SAM_CONCURRENCY`), results are cached by image hash + concept, and only components that can route a session rule are prompted.
+- **Cost controls:** photos are downscaled to JPEG (`MODEL_IMAGE_MAX_EDGE`), a video segment contributes one keyframe (the clip only for motion rules 8.2–8.4), one segment in `VIDEO_ANALYSIS_EVERY` is analysed (plus the last), and rules already decided are not re-screened from video.
 - Deploy **non-contributor/private inference configuration** where applicable for sensitive engineering evidence and confirm account data-handling terms. Store API-call identifiers, model versions and errors for audit.
 - Validate file limits, supported clip duration and structured outputs in a real API smoke test. On failures, leave the affected rule incomplete rather than showing a fabricated pass.
 
@@ -52,22 +55,22 @@ Sources for implementation verification: [Meta models](https://dev.meta.ai/docs/
 
 ```text
 argus/ (one Git repository)
-  src/apps/web/                  React frontend
-  src/apps/api/                  Fastify REST API, SSE, sessions, uploads, documents
-  src/services/inspection/       Python FastAPI tool/analysis worker
-  packages/contracts/        API schemas and status enums for internal services
+  src/apps/web/                  React frontend (SSE, viewers, SAM mask overlay)
+  src/apps/api/                  Fastify REST API, SSE, sessions, uploads, documents,
+                                 rules.ts (indexer/selector), analysis.ts (queue)
+  src/services/inspection/       Python FastAPI orchestrator (:8100) + agent_service.py
+                                 (video :8101, image :8102, pointcloud :8103)
+  src/cad_models.json            CAD registry: model_id, family, type, end_connection, hash
+  src/data/CAD_files/            registered CAD (STL)
+  src/inspection_rules/*.md      rule source documents
   src/reference-data/
+    rule-library.json            generated rule index (npm run index:rules)
+    rule-metadata.json           stage / evidence / equipment / approved thresholds
+    visual-routing.json          SAM component -> rule routing per equipment family
     cvs6000d-48-demo/
-      manifest.json
-      cad/cvs-6000d-48-f1-ac.stp   # immutable original baseline
-      cad/valve.glb                # derived mesh, same design
-      cad/features.json           # verified feature IDs/coordinate frames
-      instructions/*.pdf
-      rules/rules.json            # curated, quoted, numbered rules
-  tests/
-  SPEC.md
-  TECH_STACK.md
-  AGENTIC_ARCHITECTURE.md
+      cad/cad_reference.ply      CAD-derived reference cloud (+ .json hash metadata)
+      customer-documents/        demo work order, uploaded through the UI
+  docs/ (spec, architecture, PRDs, UX)
 ```
 
 **Separate repository:** `argus-simulator/` has its own React+Node app and scenario folder and calls Argus's public v1 HTTP API. No shared database, runtime or code package is required. Its tech stack lives in the separate repo.
@@ -140,6 +143,9 @@ SSE is a **server-to-browser** transport; incoming media is sent over authentica
 - `findings`: stable `findingId` + revisions, pinned rule ID, status, evidence links, CAD feature anchor only when validated.
 - `events`: increasing per-session `eventSeq`, persisted before SSE publish.
 - `dossiers`: HTML GCS key, manifest, counts, closure classification, immutable source-linked summary.
+- `referenceSnapshots`: per-session pinned rules (`ref-<id>-r<n>`), equipment, library revision, order document hash, cascade counts, sha256.
+- `documents`: uploaded customer specification / work order bytes reference, hash and extraction result (order number, rules read, text context).
+- `observations`: tool/model output linked to evidence, e.g. SAM segmentation (components, boxes, masks).
 
 **Reference rule hierarchy:** full indexed library → type/feature applicability → selected customer/work-order requirements; actual counts must be computed. Approval `APPROVED / DEMO_ONLY / REFERENCE_ONLY` distinguishes which rules can be asserted. Numeric tolerances **must** come from approved source criteria, never from a bare STEP shape or VLM guess.
 
@@ -210,6 +216,6 @@ Five-stage display: Waiting, Receiving, Analyzing, Ready to Close, Finalizing. R
 ## 11. Traceability/decisions
 
 - Feature Spec v0.9 is the **normative source** for screen/page behavior, API endpoints and lifecycle semantics; if this technical document conflicts, follow SPEC.md and reconcile the design before coding.
-- Argus's core runtime dependency on Meta is `muse-spark-1.3` + `sam-3-1`; the former interprets actual media and the latter localizes components. Neither substitutes for deterministic measurement nor supplies engineering rules.
+- Argus's core runtime dependency on Meta is `muse-spark-1.3` / `muse-wonder-1.0` + `sam-3.1`; the former interpret actual media and the latter detects which components are visible (routing). Neither substitutes for deterministic measurement nor supplies engineering rules.
 - No global instruction-source upload feature is needed; session-specific optional work-order upload **is** included. Index source rules before a demo, preserve their original numbering, and distinguish `REFERENCE_ONLY` from testable rules.
-- Open question for implementation: how many prepared scan chunks have trustworthy, externally supplied registration transforms? Until validated, show cloud points but do not claim CAD-aligned millimetre compliance.
+- Registration (answered 03 Nov): the prepared chunks carry no external pose; Argus registers the **merged** scan to its CAD reference by ICP and gates every scan rule on ICP fitness and CAD-surface coverage. Millimetre conformance is claimed only against the approved DEMO_ONLY thresholds of GEO-001…003 (RMS ≤ 3.0 mm, p95 ≤ 6.0 mm, coverage ≥ 80%).

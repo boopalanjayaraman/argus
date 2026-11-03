@@ -4,3 +4,5 @@ fastapi
 uvicorn
 pytest
 google-cloud-logging
+pypdf
+meta-sam-parser

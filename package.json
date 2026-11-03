@@ -6,6 +6,7 @@
     "build": "npm --prefix src/apps/web run build && npm --prefix src/apps/api run build",
     "start": "npm run build && npm --prefix src/apps/api run start",
     "test": "node scripts/check-ux-classes.mjs && npm --prefix src/apps/api run test && npm --prefix src/apps/web run test && src/services/inspection/.venv/bin/python -m pytest src/services/inspection/tests -q",
-    "check:ux": "node scripts/check-ux-classes.mjs"
+    "check:ux": "node scripts/check-ux-classes.mjs",
+    "index:rules": "npm --prefix src/apps/api run index:rules"
   }
 }

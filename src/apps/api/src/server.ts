@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { storageMode, putObjectIfConfigured } from './storage.js';
 import { mongoStore } from './db.js';
 import { logger } from './logger.js';
+import { loadRuleIndex, selectSessionRules, evaluable } from './rules.js';
+import { AnalysisQueue, type Job } from './analysis.js';
 
 // Minimal .env loader (no dependency): repo-root .env, process env wins.
 // Skipped under tests so suites stay hermetic (no real Atlas/GCS calls).
@@ -19,15 +21,15 @@ if (!process.env.VITEST) try {
   }
 } catch {}
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
-const DATA = path.join(root, 'data');
+const DATA = process.env.ARGUS_DATA_DIR || path.join(root, 'data');
 const DB_FILE = path.join(DATA, 'db.json');
 const PORT = Number(process.env.PORT || 8000);
 fs.mkdirSync(path.join(DATA, 'evidence'), { recursive: true });
 
-type Rule = any;
 const cadModels = JSON.parse(fs.readFileSync(path.join(root, 'src/cad_models.json'), 'utf8')).cad_models;
-const rulePack = JSON.parse(fs.readFileSync(path.join(root, 'src/reference-data/cvs6000d-48-demo/rules/rules.json'), 'utf8'));
-
+const ORDER_EXTENSIONS = ['.pdf', '.docx', '.xlsx'];
+const CLOSED = ['COMPLETED', 'TERMINATED'];
+const DECIDED = ['PASS', 'WARNING', 'FAIL'];
 
 /** Stride-sample a binary PLY to at most `max` vertices (header rewritten). */
 export function samplePlyBuffer(data: Buffer, max: number): Buffer {
@@ -68,83 +70,9 @@ export function cadReferencePath(model: any): string | null {
   return null;
 }
 
-/** Inspection Rules library: parsed live from src/inspection_rules/*.md.
- * Each markdown file is one rule document; individual checkable rules are
- * extracted from `ID: text` lines (NP-001, TAG-001, CRN-001, ...) and from
- * numbered checklist table rows (2.1, 2.2, ...). No rules are hardcoded. */
-export function stageFor(file: string, title: string): string {
-  const s = `${file} ${title}`.toLowerCase();
-  if (s.includes('asme') || s.includes('visual')) return 'Visual Inspection';
-  if (s.includes('nameplate') || s.includes('identification') || s.includes('tagging')) return 'Identification';
-  if (s.includes('assembly') || s.includes('torque') || s.includes('sequence')) return 'Assembly';
-  if (s.includes('test') || s.includes('regulator') || s.includes('control_valve') || s.includes('cv_validation')) return 'Functional Testing';
-  if (s.includes('release') || s.includes('checklist')) return 'Release Gates';
-  return 'Global Rules';
-}
-
-export function loadInspectionRules() {
-  const dir = path.join(root, 'src/inspection_rules');
-  const empty = { documents: [], rules: [], stages: [], counts: { documents: 0, rules: 0, categories: {} as Record<string, number> } };
-  if (!fs.existsSync(dir)) return empty;
-  const documents: any[] = []; const rules: any[] = [];
-  for (const file of fs.readdirSync(dir).filter(f => f.endsWith('.md')).sort()) {
-    const text = fs.readFileSync(path.join(dir, file), 'utf8');
-    const title = (text.match(/^#\s+(.+)$/m) || [])[1] || file.replace(/\.md$/, '');
-    const stage = stageFor(file, title);
-    const category = stage;
-    const docRules: any[] = [];
-    let section = title.replace(/^Inspection - |^Assembly - /, '');
-    let note = '';
-    const sectionNotes: Record<string, string> = {};
-    for (const raw of text.split('\n')) {
-      const line = raw.trim();
-      const h = line.match(/^##\s+(?:\d+\.\s*)?(.+)$/);
-      if (h) { section = h[1].trim(); note = ''; continue; }
-      const rej = line.match(/^\*\*Reject if:\*\*\s*(.+)$/i);
-      if (rej) { note = `Reject if: ${rej[1]}`; sectionNotes[section] = note; }
-      const m = line.match(/^([A-Z][A-Z0-9]*-\d{3,}|TAG-\d{3}|CRN-\d{3})[:\s]+(.{10,})$/);
-      if (m) { docRules.push({ ruleId: m[1], code: m[1], title: m[2].trim(), text: m[2].trim(), line: '', evidence: stage === 'Visual Inspection' || stage === 'Identification' ? 'Photo or video' : 'Work order record', document: file, category, stage, section, source: title }); continue; }
-      const para = line.length > 60 && !line.startsWith('#') && !line.startsWith('>') && !line.startsWith('|') && !line.startsWith('Source:') && line.includes(';');
-      if (para) {
-        for (const item of line.split(';').map(x => x.trim()).filter(x => x.length > 15)) {
-          const seq = docRules.length + 1;
-          const code = `${file.replace(/\.md$/, '').replace(/[^a-z0-9]+/gi, '-').slice(0, 18)}-${String(seq).padStart(2, '0')}`;
-          docRules.push({ ruleId: code, code, title: item.slice(0, 90), text: item, line: '', evidence: stage === 'Release Gates' ? 'Work order record' : 'Functional test', document: file, category, stage, section, source: title });
-        }
-        continue;
-      }
-      const bullet = line.match(/^[-*]\s+(.{15,})$/);
-      if (bullet && !line.startsWith('|')) {
-        const seq = docRules.length + 1;
-        const code = `${file.replace(/\.md$/, '').replace(/[^a-z0-9]+/gi, '-').slice(0, 18)}-${String(seq).padStart(2, '0')}`;
-        docRules.push({ ruleId: code, code, title: bullet[1].trim().slice(0, 90), text: bullet[1].trim(), line: '', evidence: stage === 'Assembly' ? 'Measurement' : stage === 'Functional Testing' ? 'Functional test' : 'Work order record', document: file, category, stage, section, source: title });
-        continue;
-      }
-      const cells = line.split('|').map(c => c.trim()).filter((_, i, a) => i > 0 && i < a.length - 1);
-      if (/^\d+\.\d+$/.test(cells[0] || '') && cells.length >= 4 && !/Inspection Item/i.test(cells[1] || '')) {
-        docRules.push({ ruleId: cells[0], code: cells[0], title: cells[1], line: cells[3], text: cells[3], reference: cells[2], evidence: 'Photo or video', document: file, category, stage, section, note, source: title });
-      }
-    }
-    for (const r of docRules) if (sectionNotes[r.section]) r.note = sectionNotes[r.section];
-    documents.push({ file, title, category, stage, ruleCount: docRules.length, markdown: text });
-    rules.push(...docRules);
-  }
-  // Stage cards in UX order, sections (toc) per stage.
-  const order = ['Visual Inspection', 'Identification', 'Assembly', 'Functional Testing', 'Release Gates', 'Global Rules'];
-  const byStage = new Map<string, any[]>();
-  for (const r of rules) { if (!byStage.has(r.stage)) byStage.set(r.stage, []); byStage.get(r.stage)!.push(r); }
-  const stages = order.filter(s => byStage.has(s)).map(name => {
-    const rs = byStage.get(name)!;
-    const sections = [...new Set(rs.map(r => r.section))].map(sec => ({ name: sec, count: rs.filter(r => r.section === sec).length, note: (rs.find(r => r.section === sec && r.note) || {}).note || '' }));
-    return { name, count: rs.length, sections };
-  });
-  const categories: Record<string, number> = {};
-  for (const s of stages) categories[s.name] = s.count;
-  return { documents, rules, stages, counts: { documents: documents.length, rules: rules.length, categories } };
-}
-
-interface DB { inspections: any[]; evidence: any[]; findings: any[]; events: any[]; dossiers: any[] }
-function loadDB(): DB { try { return JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch { return { inspections: [], evidence: [], findings: [], events: [], dossiers: [] }; } }
+interface DB { inspections: any[]; evidence: any[]; findings: any[]; events: any[]; dossiers: any[]; referenceSnapshots: any[]; documents: any[]; observations: any[] }
+const emptyDB = (): DB => ({ inspections: [], evidence: [], findings: [], events: [], dossiers: [], referenceSnapshots: [], documents: [], observations: [] });
+function loadDB(): DB { try { return { ...emptyDB(), ...JSON.parse(fs.readFileSync(DB_FILE, 'utf8')) }; } catch { return emptyDB(); } }
 let mongoSyncTimer: any = null;
 function saveDB(db: DB) {
   fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
@@ -155,12 +83,17 @@ function saveDB(db: DB) {
 }
 let db = loadDB();
 const listeners = new Map<string, Set<any>>();
+const eventSeqs = new Map<string, number>();
 function emit(db: DB, sessionId: string, type: string, payload: any = {}) {
-  const ev = { eventSeq: db.events.filter(e => e.sessionId === sessionId).length + 1, sessionId, type, at: new Date().toISOString(), ...payload };
+  if (!eventSeqs.has(sessionId)) eventSeqs.set(sessionId, db.events.filter(e => e.sessionId === sessionId).reduce((m, e) => Math.max(m, e.eventSeq || 0), 0));
+  const eventSeq = eventSeqs.get(sessionId)! + 1;
+  eventSeqs.set(sessionId, eventSeq);
+  const ev = { eventSeq, sessionId, type, at: new Date().toISOString(), ...payload };
   db.events.push(ev); saveDB(db);
   (listeners.get(sessionId) || new Set()).forEach((res: any) => { try { res.write(`id: ${ev.eventSeq}\ndata: ${JSON.stringify(ev)}\n\n`); } catch {} });
   return ev;
 }
+
 /** Ingest-token gate (spec §10.4): when ARGUS_INGEST_TOKEN is configured
  * (non-placeholder), evidence-ingestion POSTs must carry a matching
  * `Authorization: Bearer <token>`. Unset/placeholder = local demo, no gate.
@@ -185,68 +118,37 @@ export function aggregateOutcome(statuses: string[], terminated = false): string
   return 'PASS';
 }
 
-const EVIDENCE_MODALITIES: Record<string, string[]> = {
-  'Photo or video': ['photo', 'video'], '3D scan': ['pointcloud'],
-  'Measurement': [], 'Functional test': [], 'Work order record': []
-};
+const sha256 = (data: string | Buffer) => crypto.createHash('sha256').update(data).digest('hex');
+/** Dossier file on disk; older records stored paths relative to the repo root. */
+const dossierFile = (d: any) => String(d.htmlPath).startsWith('data/') ? path.join(root, d.htmlPath) : path.join(DATA, d.htmlPath);
+const modelFor = (id: string) => cadModels.find((m: any) => m.model_id === id);
 
-/** Session-applicable rules come from the full Inspection Rules library
- * (src/inspection_rules), not the 5-rule demo pack: rules whose evidence
- * can be produced in a visual session are applicable; measurement,
- * functional-test and work-order rules wait for those records. */
-export function librarySessionRules(): any[] {
-  return loadInspectionRules().rules.map((r: any) => {
-    const modalities = EVIDENCE_MODALITIES[r.evidence] || [];
-    return {
-      ruleId: r.code, section: r.code, title: r.title,
-      category: r.section, stage: r.stage,
-      quote: r.text, source: `${r.source} (${r.document})`, reference: r.reference || '',
-      features: [] as string[], modalities,
-      applicability: modalities.length ? 'APPROVED' : 'REFERENCE_ONLY'
-    };
-  });
+/** Pin the session's rule set (Spec §5, PRD-06): every later analysis,
+ * citation and dossier reads this snapshot, never the live library. */
+export function pinSnapshot(insp: any, orderDocument: any | null, legacy = false) {
+  const model = modelFor(insp.model_id) || {};
+  const index = loadRuleIndex();
+  const sel = selectSessionRules(index, model, orderDocument);
+  const revision = db.referenceSnapshots.filter(s => s.sessionId === insp.id).length + 1;
+  const snapshot = {
+    snapshotId: `ref-${insp.id}-r${revision}`, sessionId: insp.id, revision, createdAt: new Date().toISOString(), legacy,
+    library: { packId: index.packId, revision: index.revision },
+    model: { model_id: model.model_id, display_name: model.display_name, family: model.family, type: model.type, end_connection: model.end_connection, cadRevision: insp.cadRevision, cadSha256: insp.cadSha256 },
+    orderDocument: orderDocument ? { documentId: orderDocument.documentId, name: orderDocument.name, sha256: orderDocument.sha256, orderNumber: orderDocument.orderNumber || null, ruleCount: (orderDocument.rules || []).length } : null,
+    cascade: sel.cascade, rules: sel.rules, sha256: sha256(JSON.stringify(sel.rules)),
+  };
+  db.referenceSnapshots.push(snapshot);
+  insp.referenceSnapshotId = snapshot.snapshotId;
+  return snapshot;
 }
 
-function sessionRules(insp: any) {
-  return librarySessionRules().map((r: Rule) => {
-    const f = db.findings.filter((x: any) => x.sessionId === insp.id && x.ruleId === r.ruleId).sort((a: any, b: any) => b.revision - a.revision)[0];
-    return { ...r, status: f ? f.ruleStatus : (r.applicability === 'REFERENCE_ONLY' ? 'NOT_APPLICABLE' : 'NOT_INSPECTED'), finding: f || null };
-  });
+/** The session's current pinned snapshot. Sessions created before pinning
+ * existed get one built on first access and marked legacy. */
+export function snapshotFor(insp: any) {
+  const snaps = db.referenceSnapshots.filter(s => s.sessionId === insp.id);
+  if (snaps.length) return snaps.sort((a, b) => b.revision - a.revision)[0];
+  const snap = pinSnapshot(insp, null, true); saveDB(db); return snap;
 }
-function refresh(insp: any) {
-  const ev = db.evidence.filter((e: any) => e.sessionId === insp.id);
-  if (insp.lifecycleStatus === 'WAITING' && ev.length) insp.lifecycleStatus = 'RECEIVING';
-  else if (!['COMPLETED', 'TERMINATED', 'FINALIZING'].includes(insp.lifecycleStatus) && ev.length > 1 && !insp.producerComplete) insp.lifecycleStatus = 'ANALYZING';
-  else if (insp.producerComplete && insp.lifecycleStatus === 'ANALYZING') insp.lifecycleStatus = 'READY_TO_CLOSE';
-  // Finding counts are per applicable rule (69 of the 158-rule library),
-  // never per evidence item or per finding revision.
-  const applicable = sessionRules(insp).filter((r: any) => r.applicability !== 'REFERENCE_ONLY');
-  insp.outcome = ['COMPLETED', 'TERMINATED'].includes(insp.lifecycleStatus) ? insp.outcome : aggregateOutcome(applicable.map((r: any) => r.status));
-  insp.counts = { evidence: ev.length, video: ev.filter((e: any) => e.mediaType === 'video').length, photo: ev.filter((e: any) => e.mediaType === 'photo').length, pointcloud: ev.filter((e: any) => e.mediaType === 'pointcloud').length };
-  const sts = applicable.map((r: any) => r.status);
-  const cc = (s: string) => sts.filter((x: string) => x === s).length;
-  insp.findings = { pass: cc('PASS'), warning: cc('WARNING'), fail: cc('FAIL'), insufficient: cc('INSUFFICIENT_EVIDENCE'), unchecked: cc('NOT_INSPECTED'), total: sts.length };
-}
-
-
-/** Stream order for video segments: sequence, then capture time. */
-export function orderVideos(evidences: any[]): any[] {
-  return evidences.filter((e: any) => e.mediaType === 'video')
-    .sort((a: any, b: any) => (a.sequence || 0) - (b.sequence || 0) || (a.relativeTimeMs || 0) - (b.relativeTimeMs || 0) || String(a.eventId).localeCompare(String(b.eventId)));
-}
-
-/** Parse a single Range header; returns null when absent/invalid. */
-export function parseRange(header: string | undefined, size: number): { start: number; end: number } | null {
-  if (!header) return null;
-  const m = header.match(/^bytes=(\d*)-(\d*)$/);
-  if (!m) return null;
-  const start = m[1] ? Number(m[1]) : 0;
-  const end = m[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
-  if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= size) return null;
-  return { start, end };
-}
-
-
 
 /** Latest finding per rule for one session (revisions supersede). */
 export function latestFindings(findings: any[], sessionId: string): any[] {
@@ -259,10 +161,17 @@ export function latestFindings(findings: any[], sessionId: string): any[] {
   return [...latest.values()];
 }
 
-/** Latest finding status per rule for one session (revisions supersede).
- * Counts never exceed the session rule count (158 max, 69 applicable). */
+/** Latest finding status per rule for one session (revisions supersede). */
 export function latestStatuses(findings: any[], sessionId: string): string[] {
   return latestFindings(findings, sessionId).map((f: any) => f.ruleStatus);
+}
+
+function sessionRules(insp: any) {
+  const latest = new Map(latestFindings(db.findings, insp.id).map(f => [f.ruleId, f]));
+  return snapshotFor(insp).rules.map((r: any) => {
+    const f = latest.get(r.ruleId);
+    return { ...r, status: !evaluable(r) ? 'NOT_APPLICABLE' : f ? f.ruleStatus : 'NOT_INSPECTED', finding: f || null };
+  });
 }
 
 /** Map an orchestrator observation to a finding verdict, or null to keep
@@ -285,134 +194,382 @@ export function pickRegistration(observations: any[]): any | null {
   return regs.sort((a: any, b: any) => (b.fitness || 0) - (a.fitness || 0))[0];
 }
 
-function analyze(_insp: any, _ev: any) {
-  // Evidence receipt alone creates no finding. A rule becomes
-  // INSUFFICIENT_EVIDENCE only when SAM routing selects its component
-  // for this evidence and the rule is critical but needs evidence
-  // outside the image (see visual_routing.select_rules), or when the
-  // deterministic gate cannot decide from a qualified observation.
-  // Rules not routed to an evidence item stay NOT_INSPECTED.
+/** Human-readable reason for a scan rule decided from a registration. */
+export function geometryReason(rule: any, status: string, reg: any): string {
+  const conds = [...(rule.prerequisites || []), ...(Array.isArray(rule.threshold) ? rule.threshold : rule.threshold ? [rule.threshold] : [])];
+  const fmt = (c: any) => {
+    const v = reg?.[c.metric];
+    const shown = v === undefined || v === null ? 'n/a' : c.metric === 'surfaceCoverageFraction' || c.metric === 'fitness' ? `${(v * (c.metric === 'fitness' ? 1 : 100)).toFixed(c.metric === 'fitness' ? 3 : 1)}${c.metric === 'fitness' ? '' : '%'}` : `${Number(v).toFixed(2)} mm`;
+    const limit = c.metric === 'surfaceCoverageFraction' ? `${Math.round((c.min ?? c.max) * 100)}%` : c.unit === 'mm' ? `${c.max ?? c.min} mm` : `${c.min ?? c.max}`;
+    return `${c.metric} ${shown} (${'max' in c ? '≤' : '≥'} ${limit})`;
+  };
+  return `${status === 'PASS' ? 'Within' : status === 'FAIL' ? 'Outside' : 'Not decidable:'} approved scan limits · ${conds.map(fmt).join(' · ')} · merged scan of ${reg?.mergedChunks ?? '?'} chunks vs CAD`;
 }
+
+/** Stream order for video segments: sequence, then capture time. */
+export function orderVideos(evidences: any[]): any[] {
+  return evidences.filter((e: any) => e.mediaType === 'video')
+    .sort((a: any, b: any) => (a.sequence || 0) - (b.sequence || 0) || (a.relativeTimeMs || 0) - (b.relativeTimeMs || 0) || String(a.eventId).localeCompare(String(b.eventId)));
+}
+
+/** Parse a single Range header; returns null when absent/invalid. */
+export function parseRange(header: string | undefined, size: number): { start: number; end: number } | null {
+  if (!header) return null;
+  const m = header.match(/^bytes=(\d*)-(\d*)$/);
+  if (!m) return null;
+  const start = m[1] ? Number(m[1]) : 0;
+  const end = m[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
+  if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= size) return null;
+  return { start, end };
+}
+
+const esc = (v: any) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as any)[c]);
+/** Citation for a pinned rule: document + section (+ page for order rules). */
+export function citation(r: any): string {
+  const doc = r.document && !String(r.source || '').includes(r.document) ? `${r.source || ''} (${r.document})` : r.source || '';
+  const where = r.origin === 'order' ? (r.page ? `p.${r.page}` : '') : r.section && r.section !== r.ruleId ? `§ ${r.section}` : '';
+  return [doc, where, `rule ${r.code || r.ruleId}`].filter(Boolean).join(' · ');
+}
+
 function dossierHtml(insp: any, partial: boolean) {
+  const snap = snapshotFor(insp);
   const rules = sessionRules(insp);
-  const rows = rules.map((r: any) => `<tr><td>${r.ruleId}</td><td>${r.title}</td><td>${r.status}</td><td>${r.quote} (${r.source} p.${r.page})</td></tr>`).join('');
-  return `<!doctype html><title>Dossier ${insp.id}</title><h1>${insp.name}</h1><p>${insp.id} · ${partial ? 'Partial (terminated)' : 'Full'} · Outcome: ${insp.outcome} · Lifecycle: ${insp.lifecycleStatus}</p><p>CAD: ${insp.model_id} rev ${insp.cadRevision} sha256 ${insp.cadSha256}</p><table border="1" cellspacing="0" cellpadding="6"><tr><th>Rule</th><th>Title</th><th>Status</th><th>Pinned citation</th></tr>${rows}</table><p>Evidence: ${JSON.stringify(insp.counts)} · Human review required. Not a certification.</p>`;
+  const evidence = db.evidence.filter(e => e.sessionId === insp.id);
+  const evName = new Map(evidence.map(e => [e.evidenceId, e.filename]));
+  const applicable = rules.filter((r: any) => r.status !== 'NOT_APPLICABLE');
+  const count = (s: string) => applicable.filter((r: any) => r.status === s).length;
+  const geo = insp.geometry || null;
+  const rows = applicable.map((r: any) => `<tr><td>${esc(r.ruleId)}</td><td>${esc(r.title)}</td><td>${esc(r.status)}</td><td>${esc(r.quote)}<br><small>${esc(citation(r))}</small></td><td>${esc(r.finding?.reason || 'Not evaluated.')}<br><small>${esc((r.finding?.evidenceIds || []).map((id: string) => evName.get(id) || id).join(', '))}</small></td></tr>`).join('');
+  const reference = rules.filter((r: any) => r.status === 'NOT_APPLICABLE').map((r: any) => `<li>${esc(r.ruleId)} ${esc(r.title)} <small>${esc(citation(r))}</small></li>`).join('');
+  const incomplete = (insp.incompleteAnalysis || []).map((j: any) => `<li>${esc(j.kind)} ${esc(j.evidenceId || '')}: ${esc(j.reason)}</li>`).join('');
+  const register = evidence.map(e => `<tr><td>${esc(e.mediaType)}</td><td>${esc(e.filename)}</td><td>${esc(e.sourceId)}</td><td>${e.size}</td><td><code>${esc(e.sha256)}</code></td><td>${esc(e.processingStatus)}</td></tr>`).join('');
+  return `<!doctype html><meta charset="utf-8"><title>Dossier ${esc(insp.id)}</title>
+<style>body{font:14px/1.45 system-ui,sans-serif;margin:32px;color:#12141c}table{border-collapse:collapse;width:100%;margin:8px 0 20px}td,th{border:1px solid #ccd;padding:6px;vertical-align:top;text-align:left}small{color:#4d5365}code{font-size:11px}</style>
+<h1>${esc(insp.name)}</h1>
+<p><b>Overall conclusion: ${esc(insp.outcome)}</b> · ${partial ? 'Partial dossier (terminated)' : 'Full dossier'} · Lifecycle ${esc(insp.lifecycleStatus)} · ${esc(insp.id)}</p>
+<p>Started ${esc(insp.createdAt)} · Closed ${esc(insp.closedAt)}</p>
+<h2>Reference baseline</h2>
+<p>CAD ${esc(snap.model.display_name)} (${esc(insp.model_id)}) rev ${esc(insp.cadRevision)} · sha256 <code>${esc(insp.cadSha256)}</code><br>
+Equipment ${esc(snap.model.family)} / ${esc(snap.model.type)} / ${esc(snap.model.end_connection)} ends<br>
+Rule snapshot ${esc(snap.snapshotId)} · sha256 <code>${esc(snap.sha256)}</code> · library revision ${esc(snap.library.revision)}<br>
+Rule selection: library ${snap.cascade.library} → valve type ${snap.cascade.valveType} → selected ${snap.cascade.customerSpec}${snap.orderDocument ? ` (incl. ${snap.cascade.orderRules} order rules)` : ''}<br>
+Customer order: ${snap.orderDocument ? `${esc(snap.orderDocument.orderNumber || '')} ${esc(snap.orderDocument.name)} · sha256 <code>${esc(snap.orderDocument.sha256)}</code>` : 'none uploaded'}</p>
+<h2>Summary</h2>
+<p>${applicable.length} applicable rules: ${count('PASS')} pass · ${count('WARNING')} warning · ${count('FAIL')} fail · ${count('INSUFFICIENT_EVIDENCE')} insufficient evidence · ${count('NOT_INSPECTED')} not inspected.</p>
+${geo ? `<p>Laser scan vs CAD: ${esc(geo.status)} · coverage ${geo.coverage !== undefined ? (geo.coverage * 100).toFixed(1) + '%' : 'n/a'} · RMS deviation ${esc(geo.rmsDeviationMm ?? geo.rmseMm ?? 'n/a')} mm · p95 ${esc(geo.p95DeviationMm ?? 'n/a')} mm · fitness ${esc(geo.fitness ?? 'n/a')} · ${esc(geo.chunks ?? 0)} chunks</p>` : ''}
+<h2>Findings</h2>
+<table><tr><th>Rule</th><th>Title</th><th>Status</th><th>Pinned citation</th><th>Observation and evidence</th></tr>${rows}</table>
+${incomplete ? `<h2>Incomplete analysis</h2><ul>${incomplete}</ul>` : ''}
+<h2>Not evaluated from session evidence</h2><ul>${reference || '<li>None</li>'}</ul>
+<h2>Evidence register</h2>
+<table><tr><th>Type</th><th>File</th><th>Source</th><th>Bytes</th><th>sha256</th><th>Analysis</th></tr>${register}</table>
+<p>Human review required. Findings are observations checked against pinned rules; they do not establish crack depth, leak tightness or bolt torque, and this dossier is not a certification or release.</p>`;
 }
 
 export async function buildServer() {
   await logger.init();
   logger.info('argus api starting', { cloudLogging: logger.cloudEnabled });
+  db = loadDB(); eventSeqs.clear();
   if (process.env.MONGODB_URI) {
     try {
       await mongoStore.connect();
       const fromMongo = await mongoStore.loadState();
       // Mongo is the source of truth when configured: even an empty Atlas
       // database wins over any stale local data/db.json working state.
-      db = (fromMongo || { inspections: [], evidence: [], findings: [], events: [], dossiers: [] }) as DB;
+      db = { ...emptyDB(), ...(fromMongo || {}) } as DB;
       fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
       console.log('[argus] MongoDB connected; collections synced');
     } catch (e: any) { console.error('[argus] MongoDB connect failed, using local store:', e?.message || e); }
   }
+  const INSPECTION_URL = process.env.INSPECTION_SERVICE_URL || 'http://localhost:8100';
+  const EVIDENCE_BASE = process.env.EVIDENCE_BASE_URL || 'http://localhost:8000';
+  const CLOSE_DRAIN_TIMEOUT_MS = Number(process.env.CLOSE_DRAIN_TIMEOUT_MS || 120000);
+  const MAX_ORDER_UPLOAD_MB = Number(process.env.MAX_ORDER_UPLOAD_MB || 25);
+  const VIDEO_ANALYSIS_EVERY = Math.max(1, Number(process.env.VIDEO_ANALYSIS_EVERY || 4));
+  const SSE_HEARTBEAT_MS = Number(process.env.SSE_HEARTBEAT_MS || 15000);
+
+  const getInsp = (id: string) => db.inspections.find((i: any) => i.id === id);
+  const writable = (insp: any) => !!insp && !CLOSED.includes(insp.lifecycleStatus);
+  const fileUrl = (insp: any, ev: any) => `${EVIDENCE_BASE}/api/v1/inspections/${insp.id}/evidence/${ev.evidenceId}/file`;
+
+  /** Lifecycle from facts: evidence received, jobs pending, producer done.
+   * FINALIZING and the closed states are set only by operator actions. */
+  function updateLifecycle(insp: any) {
+    if (!insp || CLOSED.includes(insp.lifecycleStatus) || insp.lifecycleStatus === 'FINALIZING') return;
+    const ev = db.evidence.filter(e => e.sessionId === insp.id).length;
+    const next = !ev ? 'WAITING' : queue.pending(insp.id).length ? 'ANALYZING' : insp.producerComplete ? 'READY_TO_CLOSE' : 'RECEIVING';
+    if (next !== insp.lifecycleStatus) { insp.lifecycleStatus = next; emit(db, insp.id, 'source.state', { lifecycleStatus: next }); }
+  }
+  function refresh(insp: any) {
+    updateLifecycle(insp);
+    const ev = db.evidence.filter((e: any) => e.sessionId === insp.id);
+    const applicable = sessionRules(insp).filter((r: any) => r.status !== 'NOT_APPLICABLE');
+    if (!CLOSED.includes(insp.lifecycleStatus)) insp.outcome = aggregateOutcome(applicable.map((r: any) => r.status));
+    insp.counts = { evidence: ev.length, video: ev.filter((e: any) => e.mediaType === 'video').length, photo: ev.filter((e: any) => e.mediaType === 'photo').length, pointcloud: ev.filter((e: any) => e.mediaType === 'pointcloud').length };
+    const sts = applicable.map((r: any) => r.status);
+    const cc = (s: string) => sts.filter((x: string) => x === s).length;
+    insp.findings = { pass: cc('PASS'), warning: cc('WARNING'), fail: cc('FAIL'), insufficient: cc('INSUFFICIENT_EVIDENCE'), unchecked: cc('NOT_INSPECTED'), total: sts.length };
+    insp.analysis = { pending: queue.pending(insp.id).length, done: ev.filter(e => e.processingStatus === 'done').length };
+  }
+
+  const queue = new AnalysisQueue(
+    { visual: Number(process.env.ANALYSIS_CONCURRENCY || 3), geometry: 1 },
+    (job: Job) => {
+      const insp = getInsp(job.sessionId);
+      const ev = job.evidenceId ? db.evidence.find(e => e.evidenceId === job.evidenceId && e.sessionId === job.sessionId) : null;
+      if (ev && writable(insp) && job.state !== 'cancelled') {
+        ev.processingStatus = ({ queued: 'queued', running: 'processing', done: 'done', failed: 'failed' } as any)[job.state] || ev.processingStatus;
+        if (job.state === 'failed') ev.processingError = job.error;
+        emit(db, job.sessionId, 'evidence.processing', { evidenceId: ev.evidenceId, processingStatus: ev.processingStatus });
+      }
+      if (insp && writable(insp)) updateLifecycle(insp);
+      saveDB(db);
+    });
+
+  /** Persist one verdict as a finding revision (never overwrite history).
+   * Visual verdicts from a later item only replace a stronger earlier one;
+   * geometry verdicts come from the whole merged scan and always supersede. */
+  function applyVerdict(insp: any, v: { ruleId: string; status: string; reason: string; evidenceId: string | null }, supersede = false) {
+    if (!writable(insp)) return false;
+    const prev = db.findings.filter((f: any) => f.sessionId === insp.id && f.ruleId === v.ruleId).sort((a: any, b: any) => b.revision - a.revision)[0];
+    const rank: Record<string, number> = { FAIL: 4, WARNING: 3, PASS: 2, INSUFFICIENT_EVIDENCE: 1 };
+    if (!supersede && prev && prev.ruleStatus !== 'INSUFFICIENT_EVIDENCE' && (rank[v.status] || 0) < (rank[prev.ruleStatus] || 0)) return false;
+    if (prev && prev.ruleStatus === v.status && prev.reason === v.reason) return false;
+    const evidenceIds = [...new Set([...(prev?.evidenceIds || []), ...(v.evidenceId ? [v.evidenceId] : [])])];
+    db.findings.push({ findingId: prev?.findingId || `f-${insp.id}-${v.ruleId}`, revision: (prev?.revision || 0) + 1, sessionId: insp.id, ruleId: v.ruleId, ruleStatus: v.status, featureId: prev?.featureId ?? null, evidenceIds, observationIds: [], reason: v.reason, cadAnchor: null, at: new Date().toISOString() });
+    emit(db, insp.id, prev ? 'finding.updated' : 'finding.created', { ruleId: v.ruleId, ruleStatus: v.status, evidenceId: v.evidenceId });
+    return true;
+  }
+
+  async function postJson(url: string, body: any, signal?: AbortSignal, timeoutMs = 1200000) {
+    const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    const onAbort = () => ctrl.abort(); signal?.addEventListener('abort', onAbort);
+    try {
+      const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal, body: JSON.stringify(body) });
+      if (!resp.ok) throw new Error(`${new URL(url).pathname} ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+      return await resp.json();
+    } finally { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); }
+  }
+
+  /** One photo or video segment: SAM routing + Muse screening against the
+   * pinned rules. Rules already decided by earlier video are not re-screened. */
+  async function runVisual(insp: any, ev: any, signal: AbortSignal) {
+    const snap = snapshotFor(insp);
+    const decided = ev.mediaType === 'video' ? latestFindings(db.findings, insp.id).filter(f => DECIDED.includes(f.ruleStatus)).map(f => f.ruleId) : [];
+    const orderDoc = snap.orderDocument ? db.documents.find(d => d.documentId === snap.orderDocument.documentId) : null;
+    const data = await postJson(`${INSPECTION_URL}/analyze-evidence`, {
+      sessionId: insp.id, model_id: insp.model_id, family: snap.model.family, type: snap.model.type,
+      rules: snap.rules.filter(evaluable), orderContext: orderDoc?.extraction?.context || null, skipRuleIds: decided,
+      evidences: [{ eventId: ev.eventId, evidenceId: ev.evidenceId, mediaType: ev.mediaType, filename: ev.filename, url: fileUrl(insp, ev) }],
+    }, signal);
+    if (signal.aborted || !writable(insp)) return;  // closed meanwhile: never write late results
+    for (const obs of data.observations || []) {
+      if (obs.kind === 'detections') {
+        const observationId = `obs-${ev.evidenceId}-sam`;
+        db.observations = db.observations.filter(o => o.observationId !== observationId);
+        db.observations.push({ observationId, sessionId: insp.id, evidenceId: ev.evidenceId, kind: 'segmentation', model: obs.model, at: new Date().toISOString(), payload: { components: obs.components } });
+        ev.detectedComponents = (obs.components || []).filter((c: any) => c.boxes && !c.error).map((c: any) => c.id);
+        emit(db, insp.id, 'observation.created', { evidenceId: ev.evidenceId, observationId, kind: 'segmentation', components: ev.detectedComponents });
+        continue;
+      }
+      const v = verdictFromObservation(obs);
+      if (v) applyVerdict(insp, v);
+    }
+    emit(db, insp.id, 'rule.progress', {});
+  }
+
+  function enqueueVisual(insp: any, ev: any) {
+    queue.enqueue(insp.id, `visual:${ev.evidenceId}`, 'visual', (signal) => runVisual(insp, ev, signal), ev.evidenceId);
+  }
+
+  /** Video is analysed one segment in VIDEO_ANALYSIS_EVERY (plus the last
+   * one at /complete); the others are recorded as sampled out. */
+  function scheduleEvidence(insp: any, ev: any) {
+    if (ev.mediaType === 'photo') return enqueueVisual(insp, ev);
+    if (ev.mediaType === 'video') {
+      const idx = orderVideos(db.evidence.filter(e => e.sessionId === insp.id)).findIndex(e => e.evidenceId === ev.evidenceId);
+      if (idx % VIDEO_ANALYSIS_EVERY === 0) return enqueueVisual(insp, ev);
+      ev.processingStatus = 'sampled_out';
+      ev.processingNote = `Video analysed one segment in ${VIDEO_ANALYSIS_EVERY}; this segment was not sent to the models.`;
+      return;
+    }
+    if (ev.mediaType === 'pointcloud') scheduleGeometry(insp);
+  }
+
+  /** Merged-scan CAD comparison; coalesced so chunks arriving mid-run
+   * trigger exactly one more run with the larger scan. */
+  function scheduleGeometry(insp: any) {
+    queue.enqueue(insp.id, `geometry:${insp.id}`, 'geometry', (signal) => runComparison(insp, signal));
+  }
+
+  async function runComparison(insp: any, signal: AbortSignal) {
+    const pcs = db.evidence.filter((e: any) => e.sessionId === insp.id && e.mediaType === 'pointcloud');
+    if (!pcs.length) { insp.geometry = { status: 'insufficient', reason: 'No point-cloud chunks received', at: new Date().toISOString() }; saveDB(db); return; }
+    insp.geometry = { ...(insp.geometry || {}), status: 'running', chunks: pcs.length, at: new Date().toISOString() }; saveDB(db);
+    const snap = snapshotFor(insp);
+    const scanRules = snap.rules.filter((r: any) => evaluable(r) && (r.modalities || []).includes('pointcloud') && r.threshold);
+    let data: any;
+    try {
+      data = await postJson(`${INSPECTION_URL}/compare-merged`, {
+        sessionId: insp.id, model_id: insp.model_id, rules: scanRules,
+        evidences: pcs.map((e: any) => ({ eventId: e.eventId, evidenceId: e.evidenceId, mediaType: 'pointcloud', filename: e.filename, url: fileUrl(insp, e) })),
+      }, signal, 600000);
+    } catch (e: any) {
+      if (signal.aborted || !writable(insp)) return;
+      insp.geometry = { status: 'unavailable', reason: String(e?.message || e), chunks: pcs.length, at: new Date().toISOString() };
+      logger.info('geometry.unavailable', { sessionId: insp.id, reason: insp.geometry.reason });
+      emit(db, insp.id, 'coverage.updated', { status: insp.geometry.status }); saveDB(db);
+      throw e;
+    }
+    if (signal.aborted || !writable(insp)) return;
+    const obs = data.observation || {};
+    const reg = obs.registration || pickRegistration(data.observations || []);
+    insp.geometry = reg ? { status: reg.status, rmseMm: reg.rmseMm, rmsDeviationMm: reg.rmsDeviationMm ?? reg.rmseMm, p95DeviationMm: reg.p95DeviationMm, fitness: reg.fitness, coverage: reg.surfaceCoverageFraction, meanDeviationMm: reg.meanDeviationMm, scanPoints: reg.scanPoints, cadPoints: reg.cadPoints, chunks: pcs.length, at: new Date().toISOString() }
+                        : { status: 'insufficient', reason: 'No geometry observation returned', chunks: pcs.length, at: new Date().toISOString() };
+    const evidenceId = pcs[pcs.length - 1].evidenceId;
+    for (const rr of obs.ruleResults || []) {
+      const rule = scanRules.find((r: any) => r.ruleId === rr.ruleId);
+      if (!rule || ['NOT_INSPECTED', 'NOT_APPLICABLE'].includes(rr.ruleStatus)) continue;
+      applyVerdict(insp, { ruleId: rr.ruleId, status: rr.ruleStatus, reason: geometryReason(rule, rr.ruleStatus, { ...reg, mergedChunks: obs.mergedChunks ?? pcs.length }), evidenceId }, true);
+    }
+    for (const e of pcs) if (e.processingStatus !== 'done') e.processingStatus = 'done';
+    logger.info('geometry.compared', { sessionId: insp.id, status: insp.geometry.status, coverage: insp.geometry.coverage });
+    emit(db, insp.id, 'coverage.updated', { status: insp.geometry.status, coverage: insp.geometry.coverage }); saveDB(db);
+  }
+
+  /** Close: End drains accepted analysis up to CLOSE_DRAIN_TIMEOUT_MS and
+   * records whatever did not finish; Terminate cancels at once. Either
+   * way intake is sealed first and late results are discarded. */
+  async function finalize(insp: any, terminated: boolean) {
+    let leftover: Job[] = [];
+    if (!terminated) {
+      const { remaining } = await queue.drain(insp.id, CLOSE_DRAIN_TIMEOUT_MS);
+      if (remaining.length) leftover = queue.cancel(insp.id);
+    } else leftover = queue.cancel(insp.id);
+    insp.incompleteAnalysis = leftover.map(j => ({ kind: j.kind, evidenceId: j.evidenceId || null, reason: terminated ? 'Cancelled by Terminate Now' : `Not finished within ${Math.round(CLOSE_DRAIN_TIMEOUT_MS / 1000)} s drain window` }));
+    for (const j of leftover) {
+      const ev = j.evidenceId ? db.evidence.find(e => e.evidenceId === j.evidenceId && e.sessionId === insp.id) : null;
+      if (ev) ev.processingStatus = 'cancelled';
+    }
+    for (const ev of db.evidence.filter(e => e.sessionId === insp.id && e.processingStatus === 'queued')) ev.processingStatus = 'cancelled';
+    const statuses = sessionRules(insp).map((r: any) => r.status);
+    insp.lifecycleStatus = terminated ? 'TERMINATED' : 'COMPLETED'; insp.closedAt = new Date().toISOString();
+    insp.outcome = aggregateOutcome(statuses, terminated);
+    refresh(insp);
+    const html = dossierHtml(insp, terminated); const dir = path.join(DATA, 'dossiers'); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, `${insp.id}.html`), html);
+    db.dossiers = db.dossiers.filter(d => d.sessionId !== insp.id);
+    db.dossiers.push({ sessionId: insp.id, partial: terminated, outcome: insp.outcome, size: Buffer.byteLength(html), at: insp.closedAt, htmlPath: path.relative(DATA, path.join(dir, `${insp.id}.html`)), sha256: sha256(html) });
+    emit(db, insp.id, 'inspection.closed', { lifecycleStatus: insp.lifecycleStatus, outcome: insp.outcome }); emit(db, insp.id, 'dossier.ready', {}); saveDB(db);
+    logger.info('inspection.closed', { sessionId: insp.id, lifecycleStatus: insp.lifecycleStatus, outcome: insp.outcome, incomplete: leftover.length });
+  }
+
+  /** Store an uploaded customer specification / work order and extract
+   * its text and printed order rules (Python service, pypdf). */
+  async function attachOrderDocument(insp: any, filename: string, buf: Buffer) {
+    const documentId = `doc-${insp.id}-${Date.now().toString(36)}`;
+    const dir = path.join(DATA, 'documents', insp.id); fs.mkdirSync(dir, { recursive: true });
+    const storagePath = path.join(dir, `${documentId}-${path.basename(filename)}`);
+    fs.writeFileSync(storagePath, buf);
+    await putObjectIfConfigured(`documents/${insp.id}/${documentId}-${path.basename(filename)}`, buf).catch(() => null);
+    const doc: any = { documentId, sessionId: insp.id, kind: 'order', name: path.basename(filename), size: buf.length, sha256: sha256(buf), at: new Date().toISOString(), storagePath: path.relative(DATA, storagePath), extraction: { status: 'failed' } };
+    db.documents.push(doc);
+    let rules: any[] = [];
+    try {
+      const out = await postJson(`${INSPECTION_URL}/documents/extract`, { url: `${EVIDENCE_BASE}/api/v1/inspections/${insp.id}/documents/${documentId}/file`, filename: doc.name }, undefined, 60000);
+      rules = out.rules || [];
+      doc.extraction = { status: 'parsed', pages: out.pages, orderNumber: out.orderNumber, ruleCount: rules.length, context: out.context };
+    } catch (e: any) {
+      doc.extraction = { status: 'failed', error: String(e?.message || e).slice(0, 300) };
+    }
+    return { ...doc, orderNumber: doc.extraction.orderNumber || null, rules };
+  }
+
+  async function readOrderUpload(req: any): Promise<{ fields: Record<string, string>; file: { filename: string; buf: Buffer } | null; error?: { code: number; body: any } }> {
+    const fields: Record<string, string> = {}; let file: any = null;
+    try {
+      for await (const part of req.parts({ limits: { fileSize: MAX_ORDER_UPLOAD_MB * 1024 * 1024 } })) {
+        if (part.type === 'field') fields[part.fieldname] = String((part as any).value ?? '');
+        else if (part.type === 'file') {
+          const ext = path.extname(part.filename || '').toLowerCase();
+          if (!ORDER_EXTENSIONS.includes(ext)) { await part.toBuffer().catch(() => null); return { fields, file: null, error: { code: 415, body: { error: { code: 'UNSUPPORTED_MEDIA_TYPE', message: `Order document must be ${ORDER_EXTENSIONS.join(', ')}` } } } }; }
+          file = { filename: part.filename, buf: await part.toBuffer() };
+        }
+      }
+    } catch (e: any) {
+      if (e?.code === 'FST_REQ_FILE_TOO_LARGE' || /too large/i.test(e?.message || '')) return { fields, file: null, error: { code: 413, body: { error: { code: 'PAYLOAD_TOO_LARGE', message: `Order document exceeds ${MAX_ORDER_UPLOAD_MB} MB` } } } };
+      throw e;
+    }
+    return { fields, file };
+  }
+
   const app = Fastify();
   await app.register(multipart, { limits: { fileSize: 200 * 1024 * 1024 } });
   app.get('/api/v1/health', async () => ({ ok: true, storage: storageMode }));
   app.get('/api/v1/cad-models/:model_id/reference.ply', async (req: any, reply) => {
-    const model = cadModels.find((m: any) => m.model_id === req.params.model_id);
+    const model = modelFor(req.params.model_id);
     const file = model && cadReferencePath(model);
     if (!file) return reply.code(404).send({ error: 'no CAD reference for model' });
     const max = Math.min(Math.max(Number(req.query.sample) || 80000, 1000), 680000);
     return reply.type('application/octet-stream').send(samplePlyBuffer(fs.readFileSync(file), max));
   });
   app.get('/api/v1/cad-models', async () => ({ cad_models: cadModels }));
-  app.get('/api/v1/instruction-sets', async () => loadInspectionRules());
-  app.get('/api/v1/rule-pack', async () => ({ packId: rulePack.packId, rules: rulePack.rules, counts: { total: rulePack.rules.length } }));
+  app.get('/api/v1/instruction-sets', async () => loadRuleIndex());
 
   app.post('/api/v1/inspections', async (req: any, reply) => {
-    const body = req.body || {};
+    let body: any = req.body || {}; let upload: any = null;
+    if (req.isMultipart?.()) {
+      const parsed = await readOrderUpload(req);
+      if (parsed.error) return reply.code(parsed.error.code).send(parsed.error.body);
+      body = parsed.fields; upload = parsed.file;
+    }
     const name = (body.name || '').trim();
-    const model = cadModels.find((m: any) => m.model_id === body.model_id) || cadModels[0];
     if (!name) return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'Inspection name is required' } });
-    if (body.model_id && !model) return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'Unknown model_id' } });
-    const insp: any = { id: `insp-${Date.now().toString(36)}`, name, model_id: model.model_id, cadRevision: model.revision, cadSha256: model.sha256, lifecycleStatus: 'WAITING', outcome: 'PENDING', createdAt: new Date().toISOString(), counts: { evidence: 0, video: 0, photo: 0, pointcloud: 0 }, producerComplete: false };
-    db.inspections.push(insp); emit(db, insp.id, 'inspection.created', {}); saveDB(db);
-    logger.info('inspection.created', { sessionId: insp.id, model_id: insp.model_id });
+    if (body.model_id && !modelFor(body.model_id)) return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'Unknown model_id' } });
+    const model = modelFor(body.model_id) || cadModels[0];
+    const insp: any = { id: `insp-${Date.now().toString(36)}${crypto.randomBytes(2).toString('hex')}`, name, model_id: model.model_id, family: model.family, type: model.type, cadRevision: model.revision, cadSha256: model.sha256, lifecycleStatus: 'WAITING', outcome: 'PENDING', createdAt: new Date().toISOString(), counts: { evidence: 0, video: 0, photo: 0, pointcloud: 0 }, producerComplete: false };
+    db.inspections.push(insp);
+    const order = upload ? await attachOrderDocument(insp, upload.filename, upload.buf) : null;
+    pinSnapshot(insp, order);
+    emit(db, insp.id, 'inspection.created', { referenceSnapshotId: insp.referenceSnapshotId }); saveDB(db);
+    logger.info('inspection.created', { sessionId: insp.id, model_id: insp.model_id, orderDocument: !!order });
     return reply.code(201).send(insp);
+  });
+  app.post('/api/v1/inspections/:id/order-document', async (req: any, reply) => {
+    const insp = getInsp(req.params.id);
+    if (!insp) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
+    if (insp.lifecycleStatus !== 'WAITING') return reply.code(409).send({ error: { code: 'SNAPSHOT_FROZEN', message: 'The rule snapshot is frozen once evidence arrives; attach the order document before sending evidence.' } });
+    const parsed = await readOrderUpload(req);
+    if (parsed.error) return reply.code(parsed.error.code).send(parsed.error.body);
+    if (!parsed.file) return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'file required' } });
+    const order = await attachOrderDocument(insp, parsed.file.filename, parsed.file.buf);
+    const snap = pinSnapshot(insp, order);
+    emit(db, insp.id, 'inspection.snapshot', { referenceSnapshotId: snap.snapshotId }); saveDB(db);
+    return reply.code(201).send({ snapshotId: snap.snapshotId, cascade: snap.cascade, document: { documentId: order.documentId, name: order.name, extraction: order.extraction } });
   });
   app.get('/api/v1/inspections', async (req: any) => {
     const q = (req.query.q || '').toLowerCase();
     const list = db.inspections.filter((i: any) => !q || i.name.toLowerCase().includes(q) || i.id.includes(q)).slice().reverse();
     list.forEach(refresh);
-    return { inspections: list, counts: { total: list.length, active: list.filter((i: any) => !['COMPLETED', 'TERMINATED'].includes(i.lifecycleStatus)).length, completed: list.filter((i: any) => i.lifecycleStatus === 'COMPLETED').length, terminated: list.filter((i: any) => i.lifecycleStatus === 'TERMINATED').length } };
+    return { inspections: list, counts: { total: list.length, active: list.filter((i: any) => !CLOSED.includes(i.lifecycleStatus)).length, completed: list.filter((i: any) => i.lifecycleStatus === 'COMPLETED').length, terminated: list.filter((i: any) => i.lifecycleStatus === 'TERMINATED').length } };
   });
-  const getInsp = (id: string) => db.inspections.find((i: any) => i.id === id);
 
-  const INSPECTION_URL = process.env.INSPECTION_SERVICE_URL || 'http://localhost:8100';
-  const EVIDENCE_BASE = process.env.EVIDENCE_BASE_URL || 'http://localhost:8000';
-  async function runComparison(insp: any) {
-    const pcs = db.evidence.filter((e: any) => e.sessionId === insp.id && e.mediaType === 'pointcloud');
-    if (!pcs.length) { insp.geometry = { status: 'insufficient', reason: 'No point-cloud chunks received', at: new Date().toISOString() }; saveDB(db); return; }
-    insp.geometry = { status: 'running', chunks: pcs.length, at: new Date().toISOString() }; saveDB(db);
-    try {
-      const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 240000);
-      const resp = await fetch(`${INSPECTION_URL}/compare-merged`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
-        body: JSON.stringify({ sessionId: insp.id, model_id: insp.model_id, evidences: pcs.map((e: any) => ({ eventId: e.eventId, evidenceId: e.evidenceId, mediaType: 'pointcloud', filename: e.filename, url: `${EVIDENCE_BASE}/api/v1/inspections/${insp.id}/evidence/${e.evidenceId}/file` })) }) });
-      clearTimeout(timer);
-      if (!resp.ok) throw new Error(`orchestrator ${resp.status}`);
-      const data: any = await resp.json();
-      const reg = data.observation?.registration || pickRegistration(data.observations || []);
-      insp.geometry = reg ? { status: reg.status, rmseMm: reg.rmseMm, fitness: reg.fitness, coverage: reg.surfaceCoverageFraction, meanDeviationMm: reg.meanDeviationMm, scanPoints: reg.scanPoints, cadPoints: reg.cadPoints, chunks: pcs.length, at: new Date().toISOString() }
-                          : { status: 'insufficient', reason: 'No geometry observation returned', chunks: pcs.length, at: new Date().toISOString() };
-      logger.info('geometry.compared', { sessionId: insp.id, status: insp.geometry.status, rmseMm: insp.geometry.rmseMm, coverage: insp.geometry.coverage });
-    } catch (e: any) {
-      insp.geometry = { status: 'unavailable', reason: String(e?.message || e), chunks: pcs.length, at: new Date().toISOString() };
-      logger.info('geometry.unavailable', { sessionId: insp.id, reason: insp.geometry.reason });
-    }
-    emit(db, insp.id, 'geometry.compared', { status: insp.geometry.status }); saveDB(db);
-  }
-
-  async function dispatchVisual(insp: any) {
-    const items = db.evidence.filter((e: any) => e.sessionId === insp.id && ['photo', 'video'].includes(e.mediaType));
-    if (!items.length) { insp.visualAnalysis = { status: 'insufficient', reason: 'No photographs or video received', at: new Date().toISOString() }; saveDB(db); return; }
-    insp.visualAnalysis = { status: 'running', items: items.length, photos: items.filter((e: any) => e.mediaType === 'photo').length, videos: items.filter((e: any) => e.mediaType === 'video').length, done: 0, verdicts: 0, at: new Date().toISOString() }; saveDB(db);
-    let applied = 0, failures = 0;
-    // One orchestrator call per evidence item: SAM detects the valve
-    // components in that photo/segment and only the routed subset of
-    // the 69 applicable rules is screened for it (in parallel there).
-    // Findings land progressively; one bad item cannot sink the batch.
-    for (const ev of items) {
-      try {
-        const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 1200000);
-        const resp = await fetch(`${INSPECTION_URL}/analyze-evidence`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
-          body: JSON.stringify({ sessionId: insp.id, model_id: insp.model_id, evidences: [{ eventId: ev.eventId, evidenceId: ev.evidenceId, mediaType: ev.mediaType, filename: ev.filename, url: `${EVIDENCE_BASE}/api/v1/inspections/${insp.id}/evidence/${ev.evidenceId}/file` }] }) });
-        clearTimeout(timer);
-        if (!resp.ok) throw new Error(`orchestrator ${resp.status}`);
-        const data: any = await resp.json();
-        for (const obs of data.observations || []) {
-          const v = verdictFromObservation(obs);
-          if (!v) continue;
-          const prev = db.findings.filter((f: any) => f.sessionId === insp.id && f.ruleId === v.ruleId).sort((a: any, b: any) => b.revision - a.revision)[0];
-          // A later evidence item only replaces a verdict when the gate
-          // found more: keep FAIL/WARNING over PASS/INSUFFICIENT.
-          const rank: Record<string, number> = { FAIL: 4, WARNING: 3, PASS: 2, INSUFFICIENT_EVIDENCE: 1 };
-          if (prev && prev.ruleStatus !== 'INSUFFICIENT_EVIDENCE' && (rank[v.status] || 0) < (rank[prev.ruleStatus] || 0)) continue;
-          const evidenceIds = [...new Set([...(prev?.evidenceIds || []), ...(v.evidenceId ? [v.evidenceId] : [])])];
-          db.findings.push({ findingId: prev?.findingId || `f-${insp.id}-${v.ruleId}`, revision: (prev?.revision || 0) + 1, sessionId: insp.id, ruleId: v.ruleId, ruleStatus: v.status, featureId: prev?.featureId ?? null, evidenceIds, observationIds: [], reason: v.reason, cadAnchor: null, at: new Date().toISOString() });
-          applied++;
-        }
-      } catch (e: any) {
-        failures++;
-        logger.info('visual.photo_failed', { sessionId: insp.id, eventId: ev.eventId, reason: String(e?.message || e) });
-      }
-      insp.visualAnalysis = { status: 'running', items: items.length, done: (insp.visualAnalysis.done || 0) + 1, verdicts: applied, at: new Date().toISOString() };
-      saveDB(db);
-    }
-    insp.visualAnalysis = { status: failures === items.length ? 'unavailable' : 'completed', items: items.length, done: items.length, verdicts: applied, failures, at: new Date().toISOString() };
-    logger.info('visual.analyzed', { sessionId: insp.id, verdicts: applied, failures });
-    emit(db, insp.id, 'visual.analyzed', { status: insp.visualAnalysis.status }); saveDB(db);
-  }
   app.get('/api/v1/inspections/:id', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } }); refresh(i); return i; });
-  app.get('/api/v1/inspections/:id/rules', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); const sr = sessionRules(i); const applicable = sr.filter((r: any) => r.applicability !== 'REFERENCE_ONLY').length; return { cascade: { library: loadInspectionRules().counts.rules, applicable, valveType: applicable, customerSpec: applicable, referenceOnly: sr.length - applicable }, rules: sr, why: `Selected by model_id ${i.model_id} from the Inspection Rules library: ${applicable} of ${sr.length} rules are applicable to a visual (photo/video) session; the rest need measurement, functional-test or work-order records. Within a session, SAM component routing applies only the routed subset of the ${applicable} to each photo/video.` }; });
-  app.get('/api/v1/inspections/:id/evidence', async (req: any) => db.evidence.filter((e: any) => e.sessionId === req.params.id));
+  app.get('/api/v1/inspections/:id/rules', async (req: any, reply) => {
+    const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
+    const snap = snapshotFor(i); const rules = sessionRules(i);
+    const order = snap.orderDocument ? db.documents.find(d => d.documentId === snap.orderDocument.documentId) : null;
+    const m = snap.model;
+    return {
+      cascade: { ...snap.cascade, applicable: snap.cascade.customerSpec },
+      rules,
+      snapshot: { snapshotId: snap.snapshotId, revision: snap.revision, sha256: snap.sha256, libraryRevision: snap.library.revision, createdAt: snap.createdAt, legacy: !!snap.legacy },
+      model: m,
+      orderDocument: snap.orderDocument ? { ...snap.orderDocument, extraction: order ? { status: order.extraction.status, pages: order.extraction.pages, error: order.extraction.error } : null } : null,
+      why: `${snap.cascade.valveType} of ${snap.cascade.library} library rules apply to a ${m.family} / ${String(m.type).replace(/_/g, ' ')} with ${m.end_connection} ends (pinned CAD ${m.model_id}); ${snap.cascade.filteredOut} are for other valve types or end connections. ${snap.cascade.customerSpec} of them can be evaluated from photos, video or the laser scan${snap.orderDocument ? `, including ${snap.cascade.orderRules} rules printed in ${snap.orderDocument.orderNumber || snap.orderDocument.name}` : ''}; ${snap.cascade.referenceOnly} need measurement, functional-test or work-order records. SAM component routing applies only the routed subset to each photo/video.`,
+    };
+  });
+  app.get('/api/v1/inspections/:id/evidence', async (req: any) => db.evidence.filter((e: any) => e.sessionId === req.params.id).map((e: any) => ({ ...e, detections: undefined })));
+  app.get('/api/v1/inspections/:id/observations', async (req: any) => db.observations.filter((o: any) => o.sessionId === req.params.id && (!req.query.evidenceId || o.evidenceId === req.query.evidenceId)));
 
   const mergedInFlight = new Map<string, Promise<string>>();
   async function mergedVideoFile(insp: any): Promise<string> {
@@ -464,27 +621,67 @@ export async function buildServer() {
     return reply.type(mime[path.extname(ev.filename).toLowerCase()] || 'application/octet-stream').send(fs.createReadStream(fp));
   });
   app.get('/api/v1/inspections/:id/findings', async (req: any) => db.findings.filter((f: any) => f.sessionId === req.params.id));
-  app.get('/api/v1/inspections/:id/documents', async (req: any, reply) => { const insp = getInsp(req.params.id); if (!insp) return reply.code(404).send({ error: 'not found' }); const ev = db.evidence.filter((e: any) => e.sessionId === req.params.id); const dos = db.dossiers.filter((d: any) => d.sessionId === req.params.id);
+
+  /** Pinned references of a session: CAD baseline, rule snapshot, order
+   * document, plus the dossier once generated. Each is downloadable. */
+  function pinnedDocuments(insp: any) {
+    const snap = snapshotFor(insp);
+    const model = modelFor(insp.model_id);
+    const cadPath = model?.cad_file ? path.join(root, 'src', model.cad_file) : '';
+    const snapJson = JSON.stringify(snap, null, 2);
+    const docs: any[] = [];
+    if (model?.cad_file) docs.push({ docId: 'cad', name: path.basename(model.cad_file), type: 'cad', kind: 'CAD baseline', size: fs.existsSync(cadPath) ? fs.statSync(cadPath).size : 0, source: 'Pinned reference', at: insp.createdAt, when: '00:00', sha256: insp.cadSha256, path: cadPath, mime: 'model/stl' });
+    docs.push({ docId: 'rule-snapshot', name: `rule-snapshot-${insp.id}.json`, type: 'rules', kind: 'Rule snapshot', size: Buffer.byteLength(snapJson), source: `Pinned at creation · ${snap.snapshotId}`, at: snap.createdAt, when: '00:00', sha256: sha256(snapJson), content: snapJson, mime: 'application/json' });
+    for (const d of db.documents.filter(x => x.sessionId === insp.id && x.documentId === snap.orderDocument?.documentId)) {
+      docs.push({ docId: d.documentId, name: d.name, type: 'order', kind: 'Customer specification', size: d.size, source: d.extraction?.status === 'parsed' ? `Uploaded · ${d.extraction.orderNumber || 'order'} · ${d.extraction.ruleCount} rules read` : `Uploaded · rules could not be read`, at: d.at, when: '00:00', sha256: d.sha256, path: path.join(DATA, d.storagePath), mime: ({ '.pdf': 'application/pdf', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } as any)[path.extname(d.name).toLowerCase()] || 'application/octet-stream' });
+    }
+    for (const d of db.dossiers.filter(x => x.sessionId === insp.id)) docs.push({ docId: 'dossier', name: `${insp.id}_dossier.html`, type: 'Report', kind: 'Report', size: d.size, source: 'Generated at closure', at: d.at, when: 'At closure', sha256: d.sha256 || null, path: dossierFile(d), mime: 'text/html' });
+    return docs;
+  }
+  app.get('/api/v1/inspections/:id/documents', async (req: any, reply) => {
+    const insp = getInsp(req.params.id); if (!insp) return reply.code(404).send({ error: 'not found' });
+    const ev = db.evidence.filter((e: any) => e.sessionId === req.params.id);
     const rel = (at: string) => { const s = Math.max(0, Math.round((new Date(at).getTime() - new Date(insp.createdAt).getTime()) / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
-    const model = cadModels.find((m: any) => m.model_id === insp.model_id);
-    const stat = (relPath: string) => { try { return fs.statSync(path.join(root, relPath)).size; } catch { return 0; } };
-    const pinned: any[] = [];
-    if (model?.cad_file) pinned.push({ name: path.basename(model.cad_file), type: 'cad', kind: 'CAD baseline', size: stat(path.join('src', model.cad_file)), source: 'Pinned reference', at: insp.createdAt, when: '00:00', sha256: insp.cadSha256 });
-    pinned.push({ name: 'rules.json', type: 'rules', kind: 'Rule snapshot', size: stat('src/reference-data/cvs6000d-48-demo/rules/rules.json'), source: 'Pinned reference', at: insp.createdAt, when: '00:00', sha256: null });
-    const docs = [...ev.map((e: any) => ({ name: e.filename, type: e.mediaType, size: e.size, source: e.sourceId, synthetic: e.synthetic, at: e.at, when: rel(e.at), evidenceId: e.evidenceId, sha256: e.sha256 })), ...pinned, ...dos.map((d: any) => ({ name: `${d.sessionId}_dossier.html`, type: 'Report', kind: 'Report', size: d.size, source: 'Generated at closure', at: d.at, when: 'At closure', sha256: null }))];
-    return { documents: docs, total: docs.length }; });
+    const docs = [...ev.map((e: any) => ({ name: e.filename, type: e.mediaType, size: e.size, source: e.sourceId, synthetic: e.synthetic, at: e.at, when: rel(e.at), evidenceId: e.evidenceId, sha256: e.sha256, processingStatus: e.processingStatus })),
+      ...pinnedDocuments(insp).map(({ path: _p, content: _c, ...d }) => ({ ...d, url: `/api/v1/inspections/${insp.id}/documents/${d.docId}/file` }))];
+    return { documents: docs, total: docs.length };
+  });
+  app.get('/api/v1/inspections/:id/documents/:docId/file', async (req: any, reply) => {
+    const insp = getInsp(req.params.id); if (!insp) return reply.code(404).send({ error: 'not found' });
+    // Uploaded documents are served straight from storage: the inspection
+    // service downloads an order document while the session is still being
+    // created, before its snapshot exists, so this must not touch it.
+    const uploaded = db.documents.find(x => x.sessionId === insp.id && x.documentId === req.params.docId);
+    const d = uploaded ? { name: uploaded.name, path: path.join(DATA, uploaded.storagePath), mime: 'application/octet-stream' } as any
+      : pinnedDocuments(insp).find(x => x.docId === req.params.docId);
+    if (!d) return reply.code(404).send({ error: 'document not found' });
+    reply.header('Content-Disposition', `attachment; filename="${String(d.name).replace(/"/g, '')}"`).type(d.mime || 'application/octet-stream');
+    if (d.content !== undefined) return reply.send(d.content);
+    if (!d.path || !fs.existsSync(d.path)) return reply.code(404).send({ error: 'document bytes not found' });
+    return reply.send(fs.createReadStream(d.path));
+  });
+
+  /** SSE: persisted events in order; resumes after Last-Event-ID (header or
+   * ?lastEventId=) so a reconnect never replays or skips; heartbeats keep
+   * proxies from closing an idle stream. */
   app.get('/api/v1/inspections/:id/events', async (req: any, reply) => {
-    const id = req.params.id; reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+    const id = req.params.id;
+    if (!getInsp(id)) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
+    const after = Number(req.headers['last-event-id'] ?? req.query.lastEventId ?? 0) || 0;
+    reply.hijack();
+    reply.raw.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+    reply.raw.write('retry: 2000\n\n');
+    for (const e of db.events.filter((e: any) => e.sessionId === id && e.eventSeq > after)) reply.raw.write(`id: ${e.eventSeq}\ndata: ${JSON.stringify(e)}\n\n`);
     if (!listeners.has(id)) listeners.set(id, new Set()); listeners.get(id)!.add(reply.raw);
-    db.events.filter((e: any) => e.sessionId === id).forEach((e: any) => reply.raw.write(`id: ${e.eventSeq}\ndata: ${JSON.stringify(e)}\n\n`));
-    req.raw.on('close', () => listeners.get(id)?.delete(reply.raw));
+    const beat = setInterval(() => { try { reply.raw.write(': heartbeat\n\n'); } catch {} }, SSE_HEARTBEAT_MS);
+    req.raw.on('close', () => { clearInterval(beat); listeners.get(id)?.delete(reply.raw); });
   });
 
   const upload = (mediaType: string) => async (req: any, reply: any) => {
     if (!ingestAuthorized(req)) { logger.warn('ingest.rejected', { reason: 'bad or missing ingest token' }); return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Valid ingest token required' } }); }
     const insp = getInsp(req.params.id);
     if (!insp) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
-    if (['COMPLETED', 'TERMINATED', 'FINALIZING'].includes(insp.lifecycleStatus)) return reply.code(409).send({ error: { code: 'SESSION_CLOSED', message: 'Session closed' } });
+    if ([...CLOSED, 'FINALIZING'].includes(insp.lifecycleStatus)) return reply.code(409).send({ error: { code: 'SESSION_CLOSED', message: 'Session closed' } });
     let metadata: any = {}, filename = 'file', buf: Buffer | null = null;
     for await (const part of req.parts()) {
       if (part.type === 'field' && part.fieldname === 'metadata') { const v: any = (part as any).value; try { metadata = typeof v === 'string' ? JSON.parse(v) : (Buffer.isBuffer(v) ? JSON.parse(v.toString()) : v); } catch { return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'Bad metadata JSON' } }); } }
@@ -493,48 +690,77 @@ export async function buildServer() {
     if (!buf) return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'file required' } });
     if (mediaType === 'pointcloud' && (!metadata.units || !metadata.coordinateFrame)) return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'pointcloud requires units and coordinateFrame' } });
     if (!metadata.eventId) return reply.code(400).send({ error: { code: 'BAD_REQUEST', message: 'eventId required' } });
+    if ([...CLOSED, 'FINALIZING'].includes(insp.lifecycleStatus)) return reply.code(409).send({ error: { code: 'SESSION_CLOSED', message: 'Session closed' } });
+    const digest = sha256(buf);
     const existing = db.evidence.find((e: any) => e.sessionId === insp.id && e.eventId === metadata.eventId);
     if (existing) {
-      if (existing.sha256 !== crypto.createHash('sha256').update(buf).digest('hex')) return reply.code(409).send({ error: { code: 'CONFLICT', message: 'eventId reused with different payload' } });
+      if (existing.sha256 !== digest) return reply.code(409).send({ error: { code: 'CONFLICT', message: 'eventId reused with different payload' } });
       return reply.code(202).send({ evidenceId: existing.evidenceId, accepted: true, processingStatus: 'queued' });
     }
-    const sha256 = crypto.createHash('sha256').update(buf).digest('hex');
     const dir = path.join(DATA, 'evidence', insp.id); fs.mkdirSync(dir, { recursive: true });
     const evidenceId = `ev-${metadata.eventId}`;
     fs.writeFileSync(path.join(dir, `${evidenceId}-${filename}`), buf);
     await putObjectIfConfigured(`evidence/${insp.id}/${evidenceId}-${filename}`, buf).catch(() => null);
-    const ev = { evidenceId, sessionId: insp.id, eventId: metadata.eventId, sourceId: metadata.sourceId, sequence: metadata.sequence, relativeTimeMs: metadata.relativeTimeMs, mediaType, synthetic: !!metadata.synthetic, units: metadata.units, coordinateFrame: metadata.coordinateFrame, filename, size: buf.length, sha256, at: new Date().toISOString(), processingStatus: 'queued' };
-    db.evidence.push(ev); emit(db, insp.id, 'evidence.received', { evidenceId, mediaType }); analyze(insp, ev); refresh(insp); saveDB(db);
+    const ev = { evidenceId, sessionId: insp.id, eventId: metadata.eventId, sourceId: metadata.sourceId, sequence: metadata.sequence, relativeTimeMs: metadata.relativeTimeMs, mediaType, synthetic: !!metadata.synthetic, units: metadata.units, coordinateFrame: metadata.coordinateFrame, filename, size: buf.length, sha256: digest, at: new Date().toISOString(), processingStatus: 'queued' };
+    db.evidence.push(ev); emit(db, insp.id, 'evidence.received', { evidenceId, mediaType });
+    scheduleEvidence(insp, ev); updateLifecycle(insp); saveDB(db);
     logger.info('evidence.received', { sessionId: insp.id, evidenceId, mediaType, eventId: metadata.eventId, size: buf.length });
     return reply.code(202).send({ evidenceId, accepted: true, processingStatus: 'queued' });
   };
   app.post('/api/v1/inspections/:id/video', upload('video'));
   app.post('/api/v1/inspections/:id/photos', upload('photo'));
   app.post('/api/v1/inspections/:id/pointcloud', upload('pointcloud'));
-  app.post('/api/v1/inspections/:id/complete', async (req: any, reply) => { if (!ingestAuthorized(req)) return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Valid ingest token required' } }); const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); i.producerComplete = true; if (i.lifecycleStatus === 'RECEIVING') i.lifecycleStatus = 'READY_TO_CLOSE'; emit(db, i.id, 'source.complete', {}); saveDB(db); void runComparison(i); void dispatchVisual(i); return { ok: true, sessionOpen: true }; });
-  app.post('/api/v1/inspections/:id/compare', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); void runComparison(i); return { ok: true, status: 'running' }; });
-  app.post('/api/v1/inspections/:id/analyze-visual', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); void dispatchVisual(i); return { ok: true, status: 'running' }; });
+  app.post('/api/v1/inspections/:id/complete', async (req: any, reply) => {
+    if (!ingestAuthorized(req)) return reply.code(401).send({ error: { code: 'UNAUTHORIZED', message: 'Valid ingest token required' } });
+    const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
+    if (!writable(i)) return reply.code(409).send({ error: { code: 'SESSION_CLOSED', message: 'Session closed' } });
+    i.producerComplete = true;
+    emit(db, i.id, 'source.complete', {});
+    const vids = orderVideos(db.evidence.filter(e => e.sessionId === i.id));
+    const last = vids[vids.length - 1];
+    if (last && last.processingStatus === 'sampled_out') { last.processingStatus = 'queued'; delete last.processingNote; enqueueVisual(i, last); }
+    updateLifecycle(i); saveDB(db);
+    return { ok: true, sessionOpen: true };
+  });
+  app.post('/api/v1/inspections/:id/compare', async (req: any, reply) => { const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' }); if (!writable(i)) return reply.code(409).send({ error: { code: 'SESSION_CLOSED', message: 'Session closed' } }); scheduleGeometry(i); updateLifecycle(i); return { ok: true, status: 'queued' }; });
+  app.post('/api/v1/inspections/:id/analyze-visual', async (req: any, reply) => {
+    const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: 'not found' });
+    if (!writable(i)) return reply.code(409).send({ error: { code: 'SESSION_CLOSED', message: 'Session closed' } });
+    for (const ev of db.evidence.filter(e => e.sessionId === i.id && ['photo', 'video'].includes(e.mediaType) && e.processingStatus !== 'sampled_out')) enqueueVisual(i, ev);
+    updateLifecycle(i); return { ok: true, status: 'queued' };
+  });
   const close = (terminated: boolean) => async (req: any, reply: any) => {
-    const insp = getInsp(req.params.id); if (!insp) return reply.code(404).send({ error: 'not found' });
-    insp.lifecycleStatus = terminated ? 'TERMINATED' : 'COMPLETED'; insp.closedAt = new Date().toISOString();
-    insp.outcome = aggregateOutcome(sessionRules(insp).map((r: any) => r.status), terminated);
-    const html = dossierHtml(insp, terminated); const dir = path.join(DATA, 'dossiers'); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, `${insp.id}.html`), html);
-    db.dossiers.push({ sessionId: insp.id, partial: terminated, outcome: insp.outcome, size: html.length, at: insp.closedAt, htmlPath: `data/dossiers/${insp.id}.html` });
-    emit(db, insp.id, 'inspection.closed', {}); emit(db, insp.id, 'dossier.ready', {}); saveDB(db); return insp;
+    const insp = getInsp(req.params.id); if (!insp) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
+    if (CLOSED.includes(insp.lifecycleStatus)) return reply.code(409).send({ error: { code: 'SESSION_CLOSED', message: 'Session already closed' } });
+    if (insp.lifecycleStatus === 'FINALIZING' && !terminated) return reply.code(202).send(insp);
+    insp.lifecycleStatus = 'FINALIZING'; insp.closeRequestedAt = new Date().toISOString(); insp.closureMode = terminated ? 'partial' : 'full';
+    emit(db, insp.id, 'inspection.finalizing', { closureMode: insp.closureMode }); saveDB(db);
+    if (terminated) { await finalize(insp, true); return reply.code(200).send(insp); }
+    void finalize(insp, false).catch((e: any) => { insp.finalizeError = String(e?.message || e); emit(db, insp.id, 'inspection.error', { message: insp.finalizeError }); saveDB(db); });
+    return reply.code(202).send(insp);
   };
   app.post('/api/v1/inspections/:id/close', close(false));
   app.post('/api/v1/inspections/:id/terminate', close(true));
-  app.get('/api/v1/inspections/:id/dossier', async (req: any, reply) => { const d = db.dossiers.find((x: any) => x.sessionId === req.params.id); if (!d) return reply.code(404).send({ error: 'no dossier' }); return { ...d, html: fs.readFileSync(path.join(root, d.htmlPath), 'utf8') }; });
+  app.get('/api/v1/inspections/:id/dossier', async (req: any, reply) => { const d = db.dossiers.find((x: any) => x.sessionId === req.params.id); if (!d) return reply.code(404).send({ error: 'no dossier' }); return { ...d, html: fs.readFileSync(dossierFile(d), 'utf8') }; });
   app.get('/api/v1/reports', async () => ({
     reports: db.dossiers.map((d: any) => {
       const insp = db.inspections.find((i: any) => i.id === d.sessionId);
-      const applicableIds = new Set(librarySessionRules().filter((r: any) => r.applicability !== 'REFERENCE_ONLY').map((r: any) => r.ruleId));
-      const statuses = latestFindings(db.findings, d.sessionId).filter((f: any) => applicableIds.has(f.ruleId)).map((f: any) => f.ruleStatus);
+      const statuses = insp ? sessionRules(insp).filter((r: any) => r.status !== 'NOT_APPLICABLE').map((r: any) => r.status) : [];
       const c = (s: string) => statuses.filter((x: string) => x === s).length;
       return { ...d, name: insp?.name || d.sessionId, closedAt: d.at, type: d.partial ? 'Partial' : 'Full',
         findings: { pass: c('PASS'), warning: c('WARNING'), fail: c('FAIL'), insufficient: c('INSUFFICIENT_EVIDENCE'), unchecked: c('NOT_INSPECTED'), total: statuses.length } };
     }),
   }));
+
+  // Resume work a restart interrupted: open sessions re-queue evidence that
+  // was accepted but not analysed, and re-run their scan comparison.
+  for (const insp of db.inspections.filter(i => !CLOSED.includes(i.lifecycleStatus))) {
+    for (const ev of db.evidence.filter(e => e.sessionId === insp.id && ['queued', 'processing'].includes(e.processingStatus))) {
+      if (ev.mediaType === 'pointcloud') scheduleGeometry(insp); else enqueueVisual(insp, ev);
+    }
+    if (insp.lifecycleStatus === 'FINALIZING') void finalize(insp, insp.closureMode === 'partial');
+  }
+
   const webDist = path.join(root, 'src/apps/web/dist');
   if (fs.existsSync(webDist)) await app.register(fastifyStatic, { root: webDist });
   return app;

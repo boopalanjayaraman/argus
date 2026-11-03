@@ -1,5 +1,7 @@
 import { MongoClient, type Db, type Collection } from 'mongodb';
-import { COLLECTIONS, type InspectionDoc, type EvidenceDoc, type FindingDoc, type EventDoc, type DossierDoc } from './models.js';
+import { COLLECTIONS, type InspectionDoc, type EvidenceDoc, type FindingDoc, type EventDoc, type DossierDoc, type ReferenceSnapshotDoc, type SessionDocumentDoc, type ObservationDoc } from './models.js';
+
+export interface StoreState { inspections: InspectionDoc[]; evidence: EvidenceDoc[]; findings: FindingDoc[]; events: EventDoc[]; dossiers: DossierDoc[]; referenceSnapshots?: ReferenceSnapshotDoc[]; documents?: SessionDocumentDoc[]; observations?: ObservationDoc[] }
 
 /**
  * MongoDB integration (G-01).
@@ -32,6 +34,10 @@ export class MongoStore {
     await this.db.collection(COLLECTIONS.findings).createIndex({ sessionId: 1, ruleId: 1, revision: 1 });
     await this.db.collection(COLLECTIONS.events).createIndex({ sessionId: 1, eventSeq: 1 }, { unique: true });
     await this.db.collection(COLLECTIONS.dossiers).createIndex({ sessionId: 1 }, { unique: true });
+    await this.db.collection(COLLECTIONS.referenceSnapshots).createIndex({ snapshotId: 1 }, { unique: true });
+    await this.db.collection(COLLECTIONS.referenceSnapshots).createIndex({ sessionId: 1, revision: 1 });
+    await this.db.collection(COLLECTIONS.documents).createIndex({ documentId: 1 }, { unique: true });
+    await this.db.collection(COLLECTIONS.observations).createIndex({ sessionId: 1, evidenceId: 1 });
   }
 
   col<T extends object>(name: string): Collection<T> {
@@ -41,7 +47,7 @@ export class MongoStore {
 
   /** Replace-collection sync of the API working state (keeps server code
    *  unchanged while making Mongo the durable store when configured). */
-  async syncState(state: { inspections: InspectionDoc[]; evidence: EvidenceDoc[]; findings: FindingDoc[]; events: EventDoc[]; dossiers: DossierDoc[] }) {
+  async syncState(state: StoreState) {
     if (!this.db) return;
     const sync = async (name: string, docs: any[]) => {
       const c = this.db!.collection(name);
@@ -53,16 +59,20 @@ export class MongoStore {
     await sync(COLLECTIONS.findings, state.findings);
     await sync(COLLECTIONS.events, state.events);
     await sync(COLLECTIONS.dossiers, state.dossiers);
+    await sync(COLLECTIONS.referenceSnapshots, state.referenceSnapshots || []);
+    await sync(COLLECTIONS.documents, state.documents || []);
+    await sync(COLLECTIONS.observations, state.observations || []);
   }
 
   async loadState() {
     if (!this.db) return null;
     const get = async (name: string) => this.db!.collection(name).find({}, { projection: { _id: 0 } }).toArray();
-    const [inspections, evidence, findings, events, dossiers] = await Promise.all([
+    const [inspections, evidence, findings, events, dossiers, referenceSnapshots, documents, observations] = await Promise.all([
       get(COLLECTIONS.inspections), get(COLLECTIONS.evidence), get(COLLECTIONS.findings), get(COLLECTIONS.events), get(COLLECTIONS.dossiers),
+      get(COLLECTIONS.referenceSnapshots), get(COLLECTIONS.documents), get(COLLECTIONS.observations),
     ]);
     if (!inspections.length && !evidence.length && !events.length) return null;
-    return { inspections, evidence, findings, events, dossiers } as unknown as { inspections: InspectionDoc[]; evidence: EvidenceDoc[]; findings: FindingDoc[]; events: EventDoc[]; dossiers: DossierDoc[] };
+    return { inspections, evidence, findings, events, dossiers, referenceSnapshots, documents, observations } as unknown as StoreState;
   }
 
   async close() { await this.client?.close(); this.client = null; this.db = null; }

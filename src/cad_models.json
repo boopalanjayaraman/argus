@@ -4,9 +4,26 @@
             "model_id": "CVS6000_VALVE",
             "display_name": "CVS 6000D — Blue Valve",
             "revision": "demo-1",
+            "family": "Valve",
+            "type": "swing_check",
+            "end_connection": "flanged",
+            "reference_pack": "cvs6000d-48-demo",
             "cad_file": "data/CAD_files/cvs6000_valve.stl",
             "cad_format": "stl",
             "sha256": "e6920218fbfcaeace2ae87af26de4d389a676cf6f2ff1559647baa6d2aaf69d3"
+        },
+        {
+            "model_id": "CVS3000_VALVE",
+            "display_name": "CVS 3000 — Finished Valve (painted, nameplated)",
+            "revision": "demo-1",
+            "family": "Valve",
+            "type": "swing_check",
+            "end_connection": "flanged",
+            "reference_pack": "cvs6000d-48-demo",
+            "cad_file": "data/CAD_files/cvs6000_valve.stl",
+            "cad_format": "stl",
+            "sha256": "e6920218fbfcaeace2ae87af26de4d389a676cf6f2ff1559647baa6d2aaf69d3",
+            "note": "Same CAD as CVS6000_VALVE; the scenario differs in its evidence (after painting and name plating)."
         }
     ]
 }

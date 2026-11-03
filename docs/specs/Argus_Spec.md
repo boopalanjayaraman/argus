@@ -60,8 +60,8 @@ The product provides inspection-session management, an indexed inspection-rule l
 ### 3.2 Start inspection (right)
 
 - Heading **Start inspection**; required input **Inspection name** (example “CVS 6000D — Blue Valve Run”). **Start Inspection** disabled until a valid name exists.
-- Optional **Customer specification or work order** upload accepts PDF, DOCX/Word and XLSX/Excel. **Not necessary** to upload for the prepared hackathon demo: show the pinned demo specification/work order, and allow an optional uploaded customer document to override/supplement it after parsing and validation.
-- Read-only **Valve type** defaults to `CVS 6000D` from the selected reference pack; **Rules** summary says derived from valve type plus the effective customer document. The uploaded customer file may change rule selection, but must **not** fabricate acceptance criteria from narrative text.
+- Optional **Customer specification or work order** upload accepts PDF, DOCX/Word and XLSX/Excel. In the hackathon demo the prepared work order (`WO-ARGUS-CVS48-001`, kept in the reference pack) is **uploaded through this control**; it is never applied silently. Without an upload, no order rules apply and the session says so. *(Updated 03 Nov 2026 by the project owner.)*
+- **CAD model** selector from the CAD registry (each model declares equipment family, subtype and end connection); **Rules** summary says derived from valve type plus the uploaded document. The uploaded file adds only the rules it prints with an ID (e.g. `WO-R01`), quoted verbatim; it must **not** fabricate acceptance criteria from narrative text.
 - Immediately create the session with a pinned baseline (CAD asset revision/hash, rule snapshot and source documents), then navigate to `/inspections/:id` with `Waiting for evidence`.
 - Keep one reference pack as the MVP default; multiple asset types/reference packs are future scope. Show friendly error if the pack is unavailable.
 
@@ -129,7 +129,7 @@ Provide three successive rule-selection totals, a grouped table of applicable ch
 
 1. **Rule library** — all indexed records from actual instruction sources (example dataset: **156**).
 2. **Match valve type** — applicability filter for active asset type, end connection, configuration and CAD features (example dataset: **114**, not automatically all mandatory).
-3. **Match customer specification** — inspection-specific subset using order/work-order terms and evidence scope (example dataset: **10**). If a customer specification is absent, use the pinned demo work order and disclose that source.
+3. **Match customer specification** — inspection-specific subset: rules evaluable from session evidence, plus the rules printed in the uploaded customer document (example dataset: **10**). If no document is uploaded, no order rules apply and the panel says so.
 
 These totals are computed from the indexed library and current inspection; **156 / 114 / 10** are example values, not required counts or proof that every source was extracted correctly. Each rule has an explainable selection reason and `APPROVED`, `DEMO_ONLY`, or `REFERENCE_ONLY` applicability. An LLM can propose candidates, but approval/filtering is deterministic or human-configured. No applicable numerical criterion may be inferred from a CAD shape alone.
 
@@ -259,16 +259,17 @@ No login **UI** for private hackathon demo. Protect externally reachable ingesti
 ## 11. Reference data and file structure
 
 ```text
+src/cad_models.json            # CAD registry: model_id, family, type, end_connection, sha256
+src/inspection_rules/*.md      # rule source documents
 src/reference-data/
+  rule-library.json            # generated, content-versioned rule index
+  rule-metadata.json           # stage, evidence type, equipment applicability, approved thresholds
+  visual-routing.json          # SAM component -> rule routing per equipment family
   cvs6000d-48-demo/
-    manifest.json              # valve type, actual file hashes/revisions
-    cad/cvs-6000d-48-f1-ac.stp  # unmodified canonical STEP
-    cad/valve.glb              # derived browser geometry
-    cad/features.json          # verified 3D anchors
-    instructions/work-order.pdf
-    instructions/generic-check-valve-manual.pdf
-    rules/rules.json           # curated indexed rules with exact citations
+    cad/cad_reference.ply      # reference cloud derived from the registered CAD
+    customer-documents/        # demo work order, uploaded through the UI
 ```
+*(Updated 03 Nov 2026 to the implemented layout; the earlier STEP/GLB/features.json plan remains future work.)*
 
 A customer upload adds a **session-scoped source document** and an applicability decision; the rule library does not assume its terms are a new universal standard. Each rule has stable rule ID, source file/page/printed section, exact quote, category, feature(s), evidence modalities, applicability, numerical threshold *only when approved*, and selection reason.
 

@@ -10,6 +10,8 @@ export interface InspectionDoc {
   cadRevision: string;
   cadSha256: string;
   referenceSnapshotId?: string;
+  family?: string;
+  type?: string;
   lifecycleStatus: 'WAITING' | 'RECEIVING' | 'ANALYZING' | 'READY_TO_CLOSE' | 'FINALIZING' | 'COMPLETED' | 'TERMINATED';
   outcome: 'PENDING' | 'PASS' | 'WARNING' | 'FAIL' | 'INCONCLUSIVE';
   createdAt: string;
@@ -71,6 +73,46 @@ export interface DossierDoc {
   gcsUri?: string | null;
 }
 
+/** Rules pinned to one session at creation (Spec §5, PRD-06): the rule
+ *  set every later analysis, citation and dossier reads. Revision > 1 only
+ *  when an order document is attached while the session is still WAITING. */
+export interface ReferenceSnapshotDoc {
+  snapshotId: string;
+  sessionId: string;
+  revision: number;
+  createdAt: string;
+  library: { packId: string; revision: string | null };
+  model: { model_id: string; display_name: string; family: string; type: string; end_connection: string; cadRevision: string; cadSha256: string };
+  orderDocument: { documentId: string; name: string; sha256: string; orderNumber: string | null; ruleCount: number } | null;
+  cascade: { library: number; valveType: number; customerSpec: number; orderRules: number; referenceOnly: number; filteredOut: number };
+  rules: any[];
+  sha256: string;
+}
+
+/** Customer specification / work order uploaded for one session. */
+export interface SessionDocumentDoc {
+  documentId: string;
+  sessionId: string;
+  kind: 'order';
+  name: string;
+  size: number;
+  sha256: string;
+  at: string;
+  storagePath: string;
+  extraction: { status: 'parsed' | 'failed'; pages?: number; orderNumber?: string | null; ruleCount?: number; error?: string; context?: string };
+}
+
+/** Raw tool/model output linked to evidence (e.g. SAM boxes + masks). */
+export interface ObservationDoc {
+  observationId: string;
+  sessionId: string;
+  evidenceId: string;
+  kind: string;
+  model?: string;
+  at: string;
+  payload: any;
+}
+
 export interface RuleLibraryDoc {
   ruleId: string;
   section: string;
@@ -92,4 +134,7 @@ export const COLLECTIONS = {
   events: 'events',
   dossiers: 'dossiers',
   ruleLibrary: 'ruleLibrary',
+  referenceSnapshots: 'referenceSnapshots',
+  documents: 'documents',
+  observations: 'observations',
 } as const;

@@ -64,11 +64,13 @@ def reference_for_model(model_id: str, models_file: str | None = None,
     generating it on first use. This is the user-facing path: CAD given
     (by selection), reference cloud produced by Argus."""
     models_path = Path(models_file) if models_file else REPO_ROOT / "src" / "cad_models.json"
-    root = Path(ref_root) if ref_root else REPO_ROOT / "src/reference-data" / "cvs6000d-48-demo" / "cad"
     models = json.loads(models_path.read_text())["cad_models"]
     model = next((m for m in models if m["model_id"] == model_id), None)
     if model is None:
         raise ValueError(f"Unknown model_id: {model_id}")
+    # Models sharing one CAD (same sha256) share one reference pack and cache.
+    pack = model.get("reference_pack") or "cvs6000d-48-demo"
+    root = Path(ref_root) if ref_root else REPO_ROOT / "src/reference-data" / pack / "cad"
     cad_file = (models_path.parent / model["cad_file"]).resolve()
     out = root / "cad_reference.ply"
     result = generate_reference_cloud(str(cad_file), str(out), num_points=num_points)
