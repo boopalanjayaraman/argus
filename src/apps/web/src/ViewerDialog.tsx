@@ -185,18 +185,21 @@ function AnalyzedVideo({ sessionId, onShowFindings }: { sessionId: string; onSho
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label="Tracked parts and possible issues" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
         {shown.map(({ c, o, box, labels }: any) => {
           const [l, tp, r, b] = box; const col = labels.length ? tone(labels.some((x: any) => x.status === 'FAIL') ? 'FAIL' : 'WARNING') : '#8D93A8';
-          const fs = Math.max(16, W / 58);
-          const lines = labels.length ? labels.slice(0, 2).map((x: any) => `Rule ${x.rule} · ${x.text}`) : [c.id.replace(/_/g, ' ')];
-          if (labels.length > 2) lines.push(`+${labels.length - 2} more in findings`);
-          const lh = fs + 8, padX = 6;
-          const tw = Math.min(W - 8, Math.max(...lines.map((x: string) => x.length)) * fs * 0.56 + padX * 2);
+          const fs = Math.max(16, W / 58), lh = fs + 8, padX = 6, maxW = W * 0.5;
+          const sorted = [...labels].sort((x: any, y: any) => (x.status === 'FAIL' ? 0 : 1) - (y.status === 'FAIL' ? 0 : 1));
+          const fit = (txt: string) => { const n = Math.floor((maxW - padX * 2) / (fs * 0.56)); return txt.length <= n ? txt : txt.slice(0, n - 1).trimEnd() + '…'; };
+          const lines = sorted.length ? [fit(`Rule ${sorted[0].rule} · ${sorted[0].text}`)] : [c.id.replace(/_/g, ' ')];
+          if (sorted.length > 1) lines.push(`+${sorted.length - 1} more possible ${sorted.length - 1 === 1 ? 'issue' : 'issues'} on this part`);
+          const tw = Math.min(maxW, Math.max(...lines.map((x: string) => x.length)) * fs * 0.56 + padX * 2);
           const x0 = Math.max(4, Math.min(l, W - tw - 4));
-          const above = tp - lines.length * lh - 4;
-          const y0 = above >= 4 ? above : Math.min(b + 4, H - lines.length * lh - 4);
+          const above = tp - lines.length * lh - 10;
+          const y0 = above >= 4 ? above : Math.min(b + 10, H - lines.length * lh - 4);
+          const ax = Math.min(Math.max((l + r) / 2, x0 + 8), x0 + tw - 8), ay = y0 < tp ? y0 + lines.length * lh : y0;
           return <g key={`${c.id}-${o.objectId}`}>
             <rect x={l} y={tp} width={r - l} height={b - tp} fill="none" stroke={col} strokeWidth={Math.max(2, W / 500)} strokeDasharray={labels.length ? undefined : '6 4'} rx={4} />
-            <rect x={x0} y={y0} width={tw} height={lines.length * lh} rx={5} fill="#0A0B10" fillOpacity={0.78} stroke={col} strokeOpacity={0.6} />
-            {lines.map((txt: string, i: number) => <text key={i} x={x0 + padX} y={y0 + (i + 1) * lh - 6} fill={col} fontSize={fs} fontWeight={600} textLength={txt.length * fs * 0.56 > tw - padX * 2 ? tw - padX * 2 : undefined} lengthAdjust="spacingAndGlyphs">{txt}</text>)}
+            <line x1={ax} y1={ay} x2={(l + r) / 2} y2={y0 < tp ? tp : b} stroke={col} strokeOpacity={0.7} strokeWidth={Math.max(1.5, W / 800)} />
+            <rect x={x0} y={y0} width={tw} height={lines.length * lh} rx={5} fill="#0A0B10" fillOpacity={0.8} stroke={col} strokeOpacity={0.6} />
+            {lines.map((txt: string, i: number) => <text key={i} x={x0 + padX} y={y0 + (i + 1) * lh - 6} fill={col} fontSize={i === 0 ? fs : fs * 0.85} fontWeight={i === 0 ? 600 : 500}>{txt}</text>)}
           </g>;
         })}
       </svg>

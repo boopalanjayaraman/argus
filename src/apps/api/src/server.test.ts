@@ -390,6 +390,7 @@ import path from 'node:path';
 describe('analyzed video annotations (display only)', () => {
   test('labels are lightly worded and come from the finding note', () => {
     expect(annotationText('FAIL', 'Flange face exposed bare metal, no protector cover visible · screened by muse-spark-1.3 · review: x')).toBe('Possible issue: flange face exposed bare metal, no protector cover visible');
+    expect(annotationText('WARNING', 'ID plate visible but text not legible')).toBe('Worth a look: ID plate visible but text not legible');
     expect(annotationText('WARNING', 'Plate visible but 38C/100F text not legible at this distance and the rest of a long note that goes on and on')).toMatch(/^Worth a look: plate visible but .{10,60}…$/);
   });
   test('only FAIL/WARNING findings on tracked components get a label', () => {

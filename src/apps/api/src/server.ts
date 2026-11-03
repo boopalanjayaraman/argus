@@ -215,7 +215,8 @@ export function geometryReason(rule: any, status: string, reg: any): string {
 export function annotationText(status: string, reason: string): string {
   const note = String(reason || '').split(' · ')[0].replace(/\s+/g, ' ').trim().replace(/\.$/, '');
   const short = note.length <= 64 ? note : note.slice(0, 64).replace(/\s+\S*$/, '') + '…';
-  return `${status === 'FAIL' ? 'Possible issue' : 'Worth a look'}: ${short ? short.charAt(0).toLowerCase() + short.slice(1) : 'see findings'}`;
+  const lead = short && /^[A-Z][a-z]/.test(short) ? short.charAt(0).toLowerCase() + short.slice(1) : short; // keep acronyms (ID, RF, MTC)
+  return `${status === 'FAIL' ? 'Possible issue' : 'Worth a look'}: ${lead || 'see findings'}`;
 }
 
 /** Attach FAIL / WARNING findings to tracked components (display only). */
