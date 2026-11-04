@@ -162,7 +162,7 @@ gcloud run deploy argus-api --image=$REPO/argus-api:$TAG --region=$REGION --serv
   --add-volume=name=data,type=cloud-storage,bucket=$BUCKET \
   --add-volume-mount=volume=data,mount-path=/app/data \
   --set-secrets=MONGODB_URI=MONGODB_URI:latest,ARGUS_INGEST_TOKEN=ARGUS_INGEST_TOKEN:latest \
-  --set-env-vars=ARGUS_DATA_DIR=/app/data,ARGUS_DB_FILE=/tmp/argus-db.json,MONGODB_DB=argus,GCP_PROJECT_ID=$PROJECT,SERVICE_NAME=argus-api,LOG_LEVEL=info,INSPECTION_SERVICE_URL=$ORCH_URL,ANALYSIS_CONCURRENCY=6,VIDEO_ANALYSIS_EVERY=4,CLOSE_DRAIN_TIMEOUT_MS=120000,MAX_ORDER_UPLOAD_MB=25
+  --set-env-vars=ARGUS_DATA_DIR=/app/data,ARGUS_DB_FILE=/tmp/argus-db.json,MONGODB_DB=argus,GCP_PROJECT_ID=$PROJECT,SERVICE_NAME=argus-api,LOG_LEVEL=info,INSPECTION_SERVICE_URL=$ORCH_URL,ANALYSIS_CONCURRENCY=6,VIDEO_ANALYSIS_EVERY=4,CLOSE_DRAIN_TIMEOUT_MS=120000,MAX_ORDER_UPLOAD_MB=25,AUTO_CLOSE_MS=5000
 
 API_URL=$(url argus-api)
 # The inspection services download evidence from the API: tell the API its own public URL
