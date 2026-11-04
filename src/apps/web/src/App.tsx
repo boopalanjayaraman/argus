@@ -143,7 +143,7 @@ export default function App() {
     WAITING: ['Waiting for evidence', 'Nothing received yet. Panels update as files arrive.'],
     RECEIVING: ['Receiving evidence', 'Video is arriving. Checks start when the first photograph and scan land.'],
     ANALYZING: ['Receiving and analyzing', `${evidence.length} files received · ${current.analysis?.pending ?? 0} being analysed now.`],
-    READY_TO_CLOSE: ['Ready to close', 'Feed complete and analysis finished. No outcome is final until you end the inspection.'],
+    READY_TO_CLOSE: ['Ready to close', 'Feed complete and analysis finished. Closing automatically; video annotations continue in the background.'],
     FINALIZING: ['Finalizing report', 'Stopping evidence, freezing findings and generating the dossier.'],
     COMPLETED: ['Completed', `Closed ${current.closedAt ? fmtDate(current.closedAt) : ''}. Evidence and findings are frozen.`],
     TERMINATED: ['Terminated', `Closed ${current.closedAt ? fmtDate(current.closedAt) : ''}. Evidence is partial.`]

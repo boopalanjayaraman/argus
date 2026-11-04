@@ -12,6 +12,7 @@ export default defineConfig({
       ARGUS_DATA_DIR: fs.mkdtempSync(path.join(os.tmpdir(), 'argus-api-test-')),
       INSPECTION_SERVICE_URL: 'http://127.0.0.1:9',
       CLOSE_DRAIN_TIMEOUT_MS: '5000',
+      AUTO_CLOSE_MS: '-1',
     },
   },
 });

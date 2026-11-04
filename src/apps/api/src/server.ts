@@ -394,6 +394,27 @@ export async function buildServer() {
     const ev = db.evidence.filter(e => e.sessionId === insp.id).length;
     const next = !ev ? 'WAITING' : queue.pending(insp.id, DISPLAY_ONLY).length ? 'ANALYZING' : insp.producerComplete ? 'READY_TO_CLOSE' : 'RECEIVING';
     if (next !== insp.lifecycleStatus) { insp.lifecycleStatus = next; emit(db, insp.id, 'source.state', { lifecycleStatus: next }); }
+    if (next === 'READY_TO_CLOSE') scheduleAutoClose(insp);
+  }
+  /** Auto-close (demo default): once the feed is complete and every
+   * gating analysis job has finished, End the inspection automatically
+   * after AUTO_CLOSE_MS. Display-only work (SAM video tracking) keeps
+   * running in the background and is not waited for. AUTO_CLOSE_MS<0
+   * restores the manual End step. */
+  const AUTO_CLOSE_MS = Number(process.env.AUTO_CLOSE_MS ?? 5000);
+  const autoCloseTimers = new Map<string, NodeJS.Timeout>();
+  function scheduleAutoClose(insp: any) {
+    if (AUTO_CLOSE_MS < 0 || autoCloseTimers.has(insp.id)) return;
+    const t = setTimeout(() => {
+      autoCloseTimers.delete(insp.id);
+      const cur = getInsp(insp.id);
+      if (!cur || cur.lifecycleStatus !== 'READY_TO_CLOSE') return;
+      cur.lifecycleStatus = 'FINALIZING'; cur.closeRequestedAt = new Date().toISOString(); cur.closureMode = 'full'; cur.autoClosed = true;
+      emit(db, cur.id, 'inspection.finalizing', { closureMode: 'full', auto: true }); saveDB(db);
+      void finalize(cur, false).catch((e: any) => { cur.finalizeError = String(e?.message || e); emit(db, cur.id, 'inspection.error', { message: cur.finalizeError }); saveDB(db); });
+    }, AUTO_CLOSE_MS);
+    t.unref?.();
+    autoCloseTimers.set(insp.id, t);
   }
   function refresh(insp: any) {
     updateLifecycle(insp);
