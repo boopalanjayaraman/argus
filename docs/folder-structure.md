@@ -24,7 +24,7 @@ argus/
 │   ├── architecture/
 │   │   ├── Argus_Agentic_Architecture.md   # v1.0: orchestrator + sub-agents, one deterministic gate
 │   │   └── Argus_Tech_Stack.md             # v1.0
-│   ├── prd/                          # PRD-01 … PRD-10 + README index
+│   ├── prd/                          # PRD-01 … PRD-12 + README index
 │   └── ux/                           # Click-through mockups + UX_PORT_MAP.md (design source of truth)
 ├── data/                             # Runtime only (gitignored): db.json, evidence/, documents/, dossiers/, merged/
 └── src/
