@@ -129,7 +129,7 @@ Deploy bottom-up: agents → orchestrator → API (the API needs the orchestrato
 COMMON_INSP="--image=$REPO/argus-inspection:$TAG --region=$REGION --service-account=$INSP_SA $NET \
   --ingress=internal --allow-unauthenticated --execution-environment=gen2 \
   --set-secrets=META_API_KEY=META_API_KEY:latest"
-INSP_ENV="META_ADAPTER_LIVE=1,AGENT_HOST=0.0.0.0,GCP_PROJECT_ID=$PROJECT,LOG_LEVEL=info,META_SCREEN_MODEL=muse-spark-1.3,META_REVIEW_MODEL=muse-wonder-1.0,META_SAM_MODEL=sam-3.1,GEO_MIN_FITNESS=0.9,GEO_MIN_COVERAGE=0.3"
+INSP_ENV="MODEL_CALL_THREADS=32,AGENT_HTTP_TIMEOUT_S=300,META_ADAPTER_LIVE=1,AGENT_HOST=0.0.0.0,GCP_PROJECT_ID=$PROJECT,LOG_LEVEL=info,META_SCREEN_MODEL=muse-spark-1.3,META_REVIEW_MODEL=muse-wonder-1.0,META_SAM_MODEL=sam-3.1,GEO_MIN_FITNESS=0.9,GEO_MIN_COVERAGE=0.3"
 
 gcloud run deploy argus-video-agent      $COMMON_INSP --set-env-vars=$INSP_ENV --port=8101 --command=python --args=agent_service.py,video,8101      --cpu=1 --memory=2Gi --timeout=900 --max-instances=3
 gcloud run deploy argus-image-agent      $COMMON_INSP --set-env-vars=$INSP_ENV --port=8102 --command=python --args=agent_service.py,image,8102      --cpu=1 --memory=2Gi --timeout=900 --max-instances=3
@@ -162,7 +162,7 @@ gcloud run deploy argus-api --image=$REPO/argus-api:$TAG --region=$REGION --serv
   --add-volume=name=data,type=cloud-storage,bucket=$BUCKET \
   --add-volume-mount=volume=data,mount-path=/app/data \
   --set-secrets=MONGODB_URI=MONGODB_URI:latest,ARGUS_INGEST_TOKEN=ARGUS_INGEST_TOKEN:latest \
-  --set-env-vars=ARGUS_DATA_DIR=/app/data,ARGUS_DB_FILE=/tmp/argus-db.json,GCS_BUCKET=$BUCKET,MONGODB_DB=argus,GCP_PROJECT_ID=$PROJECT,SERVICE_NAME=argus-api,LOG_LEVEL=info,INSPECTION_SERVICE_URL=$ORCH_URL,ANALYSIS_CONCURRENCY=3,VIDEO_ANALYSIS_EVERY=4,CLOSE_DRAIN_TIMEOUT_MS=120000,MAX_ORDER_UPLOAD_MB=25
+  --set-env-vars=ARGUS_DATA_DIR=/app/data,ARGUS_DB_FILE=/tmp/argus-db.json,MONGODB_DB=argus,GCP_PROJECT_ID=$PROJECT,SERVICE_NAME=argus-api,LOG_LEVEL=info,INSPECTION_SERVICE_URL=$ORCH_URL,ANALYSIS_CONCURRENCY=6,VIDEO_ANALYSIS_EVERY=4,CLOSE_DRAIN_TIMEOUT_MS=120000,MAX_ORDER_UPLOAD_MB=25
 
 API_URL=$(url argus-api)
 # The inspection services download evidence from the API: tell the API its own public URL
@@ -173,7 +173,9 @@ Why these flags:
 
 - **Exactly one instance, CPU always on.** The API keeps the live analysis queue, SSE connections and its working state in memory, and runs analysis after the HTTP response returns. More than one instance would split sessions between processes. (MongoDB is the source of truth on restart; accepted-but-unanalysed evidence is re-queued at startup.)
 - **`--timeout=3600`.** SSE streams last up to the Cloud Run maximum of 60 minutes; the browser reconnects automatically and resumes with `Last-Event-ID`.
-- **Bucket mounted at `/app/data`.** Evidence, documents, dossiers and merged videos survive restarts. The working DB file (`ARGUS_DB_FILE`) stays on local disk because it is rewritten on every event; MongoDB is loaded at startup. With `GCS_BUCKET` set to the same bucket, the API's own GCS copies land on the same object keys as the mounted files.
+- **Bucket mounted at `/app/data`.** Evidence, documents, dossiers and merged videos survive restarts. The working DB file (`ARGUS_DB_FILE`) stays on local disk because it is rewritten on every event; MongoDB is loaded at startup.
+- **Database:** the cloud uses the Atlas database `argus` (`MONGODB_DB=argus`); local runs default to `argus-local`. Never point two running APIs at the same database — each one rewrites whole collections when it saves. If Atlas is unreachable at startup (e.g. the NAT IP is not yet allow-listed), the API serves from its local store and retries every 30 s; on the first successful connection it merges both sides. `/api/v1/health` reports `mongo: true` only when actually connected.
+- **Do not also set `GCS_BUCKET`.** With the mount, files already land in the bucket. `GCS_BUCKET` makes the API upload each file a second time to the same object key, and a reader that arrives during the second write can receive a truncated file (found in the first deployment: the uploaded work order could not be parsed). The health check then reports `gcs:false` — expected, the bucket is used through the mount.
 
 ### 6.4 Simulator
 

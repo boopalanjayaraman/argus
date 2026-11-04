@@ -13,7 +13,7 @@ from pydantic import BaseModel
 import coordinator, geometry, meta_adapter
 import documents
 import worklist as wl
-from agents import Orchestrator, InspectionContext, resolve_evidence_file
+from agents import Orchestrator, InspectionContext, resolve_evidence_file, use_wide_executor
 
 app = FastAPI(title="argus-inspection")
 orchestrator = Orchestrator(store_path=os.environ.get("AGENT_JOBS_FILE", "data/agent_jobs.json"))
@@ -22,6 +22,7 @@ contexts: dict[str, InspectionContext] = {}
 
 @app.on_event("startup")
 async def _recover():
+    use_wide_executor()
     # Spin sub-agents back up for jobs a previous crash left unfinished,
     # with their original payloads under their original sessionIds.
     if orchestrator.store.pending():
@@ -166,6 +167,26 @@ async def track_video(req: TrackVideoRequest):
     result = await asyncio.to_thread(meta_adapter.track_video, local, components)
     result["componentRules"] = {c["id"]: c.get("ruleCodes") or [] for c in components}
     return result
+
+
+@app.post("/dossier/pdf")
+async def dossier_pdf(dossier: dict):
+    """ReportAgent: render the frozen dossier (sent by the API at closure) as PDF."""
+    import asyncio
+    from fastapi import Response
+    sid = (dossier.get("inspection") or {}).get("id", "insp-unknown")
+    ctx = contexts.setdefault(sid, InspectionContext(session_id=sid))
+    pdf = await asyncio.to_thread(orchestrator.report_agent.build_pdf, ctx, dossier)
+    return Response(content=pdf, media_type="application/pdf")
+
+
+@app.post("/warmup")
+def warmup():
+    """Fire one tiny SAM 3.1 request so the first real photo of an
+    inspection does not pay the model's cold start (~60 s observed)."""
+    import threading
+    threading.Thread(target=meta_adapter.warm_up, daemon=True).start()
+    return {"ok": True}
 
 
 @app.get("/sessions/{session_id}/log")

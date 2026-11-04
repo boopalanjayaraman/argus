@@ -26,6 +26,19 @@ import geometry
 import meta_adapter
 
 
+MODEL_CALL_THREADS = int(os.environ.get("MODEL_CALL_THREADS", "32"))
+
+
+def use_wide_executor() -> None:
+    """Model and agent calls are network-bound and run via asyncio.to_thread,
+    whose default pool is min(32, CPUs + 4) — about 5 threads on a 1-2 vCPU
+    container, which queued a photo's rule checks 5 at a time. Give the
+    running loop a pool sized for I/O instead (MODEL_CALL_THREADS)."""
+    import concurrent.futures
+    asyncio.get_running_loop().set_default_executor(
+        concurrent.futures.ThreadPoolExecutor(max_workers=MODEL_CALL_THREADS, thread_name_prefix="model-call"))
+
+
 @dataclass
 class InspectionContext:
     session_id: str
@@ -156,6 +169,14 @@ class ReportAgent(SubAgent):
     async def run(self, ctx, evidence, rule):  # pragma: no cover - media path unused
         raise NotImplementedError("ReportAgent is invoked via build_report()")
 
+    def build_pdf(self, ctx: InspectionContext, dossier: dict) -> bytes:
+        """The frozen dossier as a printable PDF (layout only; no judgement)."""
+        import dossier_pdf
+        ctx.record(self.name, "started", "dossier pdf")
+        pdf = dossier_pdf.build_pdf(dossier)
+        ctx.record(self.name, "completed", f"dossier pdf {len(pdf)} bytes")
+        return pdf
+
     def build_report(self, ctx: InspectionContext, findings: list[dict]) -> dict:
         ctx.record(self.name, "started", f"{len(findings)} findings")
         report = {
@@ -234,7 +255,7 @@ class RemoteSubAgent(SubAgent):
 
         def _post() -> dict:
             req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
-            with urllib.request.urlopen(req, timeout=float(os.environ.get("AGENT_HTTP_TIMEOUT_S", "120"))) as resp:
+            with urllib.request.urlopen(req, timeout=float(os.environ.get("AGENT_HTTP_TIMEOUT_S", "300"))) as resp:
                 return json.loads(resp.read())
 
         result = await asyncio.to_thread(_post)

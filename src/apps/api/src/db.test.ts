@@ -33,3 +33,15 @@ describe('mongodb models/integration', () => {
     expect(insp.lifecycleStatus).toBe('WAITING');
   });
 });
+
+import { mergeStates } from './db.js';
+describe('mergeStates', () => {
+  test('union by key; primary wins on clashes; nothing dropped', () => {
+    const remote: any = { inspections: [{ id: 'a', name: 'remote A' }, { id: 'b', name: 'B' }], evidence: [], findings: [], events: [{ sessionId: 'a', eventSeq: 1 }], dossiers: [] };
+    const local: any = { inspections: [{ id: 'a', name: 'local A' }, { id: 'c', name: 'C' }], evidence: [], findings: [], events: [{ sessionId: 'c', eventSeq: 1 }], dossiers: [] };
+    const m: any = mergeStates(local, remote);
+    expect(m.inspections.map((i: any) => i.id).sort()).toEqual(['a', 'b', 'c']);
+    expect(m.inspections.find((i: any) => i.id === 'a').name).toBe('local A');
+    expect(m.events).toHaveLength(2);
+  });
+});

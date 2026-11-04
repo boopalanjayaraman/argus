@@ -29,6 +29,10 @@ def build_app(kind: str) -> FastAPI:
     agent = cls()
     app = FastAPI(title=f"argus-{agent.name}")
 
+    @app.on_event("startup")
+    async def _wide_pool():
+        agents_mod.use_wide_executor()
+
     @app.get("/health")
     def health():
         return {"ok": True, "agent": agent.name, "mediaTypes": sorted(media)}

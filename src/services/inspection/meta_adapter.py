@@ -407,3 +407,18 @@ def track_video(video_path: str, components: list[dict]) -> dict:
         tracked = list(pool.map(one, components))
     return {"status": "ready", "fps": proxy["fps"], "width": proxy["width"], "height": proxy["height"],
             "duration": proxy["duration"], "model": SAM_MODEL, "components": tracked}
+
+
+def warm_up() -> None:
+    """One tiny SAM 3.1 concept request (64x48 grey still); errors ignored.
+    Not cached, so it reaches the model every time it is called."""
+    if not _configured():
+        return
+    try:
+        still = os.path.join(media.CACHE_DIR, "warmup.jpg")
+        if not os.path.exists(still):
+            os.makedirs(media.CACHE_DIR, exist_ok=True)
+            media._ffmpeg(["-f", "lavfi", "-i", "color=c=gray:s=64x48:d=1", "-frames:v", "1", still])
+        _sam_stream_events(still, "valve", float(os.environ.get("SAM_TIMEOUT_MS", "240000")) / 1000.0)
+    except Exception:
+        pass

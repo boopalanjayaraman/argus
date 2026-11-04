@@ -25,6 +25,9 @@ const orchestrator = http.createServer((req, res) => {
         components: [{ id: 'nameplate', prompt: 'metal nameplate', objects: [{ objectId: '0', frames: [[0, 1, 2, 30, 20, 0.9], [4, 3, 2, 32, 20, 0.9]] }] },
           { id: 'flange_face', prompt: 'flange face', objects: [] }],
         componentRules: { nameplate: ['2.7', 'NP-001'], flange_face: ['4.3'] } });
+    } else if (req.url === '/dossier/pdf') {
+      mock.calls.push(`pdf:${json.inspection?.id}`);
+      res.writeHead(200, { 'Content-Type': 'application/pdf' }); res.end(Buffer.from(`%PDF-1.4 dossier for ${json.inspection?.id} findings=${json.findings?.length}`));
     } else if (req.url === '/documents/extract') {
       // Like the real service: download the stored document first.
       fetch(json.url).then(r => r.arrayBuffer()).then(() => send({ pages: 3, orderNumber: 'WO-TEST-001', context: 'Work order WO-TEST-001 size 48 in', rules: [
@@ -455,5 +458,23 @@ describe('grouping inspections by work order (display only)', () => {
     expect(h1.previous.map((p: any) => p.id)).not.toContain(second.id); // a later inspection is never "previous"
     const h3 = (await app.inject({ method: 'GET', url: `/api/v1/inspections/${loner.id}/history` })).json();
     expect(h3).toMatchObject({ groupKey: null, previous: [], rules: [] });
+  });
+});
+
+describe('dossier PDF (ReportAgent)', () => {
+  test('closure stores a PDF dossier; download serves it; documents list it', async () => {
+    const insp = await newSession('PDF Run');
+    await app.inject({ method: 'POST', url: `/api/v1/inspections/${insp.id}/terminate` });
+    const pdf = await app.inject({ method: 'GET', url: `/api/v1/inspections/${insp.id}/dossier.pdf` });
+    expect(pdf.statusCode).toBe(200);
+    expect(pdf.headers['content-type']).toContain('application/pdf');
+    expect(pdf.body.startsWith('%PDF')).toBe(true);
+    expect(pdf.body).toContain(insp.id);
+    const docs = (await app.inject({ method: 'GET', url: `/api/v1/inspections/${insp.id}/documents` })).json().documents;
+    expect(docs.find((d: any) => d.type === 'Report').name).toBe(`${insp.id}_dossier.pdf`);
+  });
+  test('no dossier before closure', async () => {
+    const insp = await newSession('No PDF yet');
+    expect((await app.inject({ method: 'GET', url: `/api/v1/inspections/${insp.id}/dossier.pdf` })).statusCode).toBe(404);
   });
 });

@@ -19,8 +19,9 @@ export class MongoStore {
 
   async connect(uri = process.env.MONGODB_URI, dbName = process.env.MONGODB_DB || 'argus'): Promise<boolean> {
     if (!uri) return false;
-    this.client = new MongoClient(uri);
-    await this.client.connect();
+    const client = new MongoClient(uri, { serverSelectionTimeoutMS: 15000 });
+    try { await client.connect(); } catch (e) { await client.close().catch(() => {}); throw e; }
+    this.client = client;
     this.db = this.client.db(dbName);
     await this.createIndexes();
     return true;
@@ -79,3 +80,22 @@ export class MongoStore {
 }
 
 export const mongoStore = new MongoStore();
+
+/** Union of two store states, keyed per collection; `primary` wins on a key
+ *  clash. Used when the API reaches MongoDB only after it has already been
+ *  serving from its local store, so neither side's records are lost. */
+export function mergeStates(primary: StoreState, secondary: StoreState): StoreState {
+  const keys: Record<string, (d: any) => string> = {
+    inspections: d => d.id, evidence: d => `${d.sessionId}|${d.eventId}`, findings: d => `${d.findingId}|${d.revision}`,
+    events: d => `${d.sessionId}|${d.eventSeq}`, dossiers: d => d.sessionId, referenceSnapshots: d => d.snapshotId,
+    documents: d => d.documentId, observations: d => d.observationId,
+  };
+  const out: any = {};
+  for (const [name, key] of Object.entries(keys)) {
+    const map = new Map<string, any>();
+    for (const d of ((secondary as any)[name] || [])) map.set(key(d), d);
+    for (const d of ((primary as any)[name] || [])) map.set(key(d), d);
+    out[name] = [...map.values()];
+  }
+  return out as StoreState;
+}

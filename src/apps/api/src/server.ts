@@ -8,7 +8,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { fileURLToPath } from 'node:url';
 import { storageMode, putObjectIfConfigured } from './storage.js';
-import { mongoStore } from './db.js';
+import { mongoStore, mergeStates } from './db.js';
 import { logger } from './logger.js';
 import { loadRuleIndex, selectSessionRules, evaluable } from './rules.js';
 import { AnalysisQueue, type Job } from './analysis.js';
@@ -275,6 +275,31 @@ export function citation(r: any): string {
   return [doc, where, `rule ${r.code || r.ruleId}`].filter(Boolean).join(' · ');
 }
 
+/** The frozen dossier as structured data — what the ReportAgent lays out
+ * as PDF. Same facts as the HTML dossier. */
+function dossierData(insp: any, partial: boolean) {
+  const snap = snapshotFor(insp);
+  const rules = sessionRules(insp);
+  const evidence = db.evidence.filter(e => e.sessionId === insp.id);
+  const evName = new Map(evidence.map(e => [e.evidenceId, e.filename]));
+  const applicable = rules.filter((r: any) => r.status !== 'NOT_APPLICABLE');
+  const count = (st: string) => applicable.filter((r: any) => r.status === st).length;
+  const order = snap.orderDocument;
+  return {
+    inspection: { id: insp.id, name: insp.name, outcome: insp.outcome, lifecycleStatus: insp.lifecycleStatus, partial, createdAt: insp.createdAt, closedAt: insp.closedAt },
+    baseline: { cadName: snap.model.display_name, modelId: insp.model_id, cadRevision: insp.cadRevision, cadSha256: insp.cadSha256, family: snap.model.family, type: snap.model.type, endConnection: snap.model.end_connection,
+      snapshotId: snap.snapshotId, snapshotSha256: snap.sha256, libraryRevision: snap.library.revision, cascade: snap.cascade, order: order ? { orderNumber: order.orderNumber, name: order.name, sha256: order.sha256 } : null },
+    summary: { applicable: applicable.length, pass: count('PASS'), warning: count('WARNING'), fail: count('FAIL'), insufficient: count('INSUFFICIENT_EVIDENCE'), notInspected: count('NOT_INSPECTED') },
+    geometry: insp.geometry || null,
+    findings: applicable.map((r: any) => ({ ruleId: r.code || r.ruleId, title: r.title, status: r.status, quote: r.quote, citation: citation(r), reason: r.finding?.reason || 'Not evaluated.', evidence: (r.finding?.evidenceIds || []).map((id: string) => evName.get(id) || id) })),
+    notEvaluated: rules.filter((r: any) => r.status === 'NOT_APPLICABLE').map((r: any) => ({ ruleId: r.code || r.ruleId, title: r.title, citation: citation(r) })),
+    incomplete: insp.incompleteAnalysis || [],
+    evidence: evidence.map(e => ({ mediaType: e.mediaType, filename: e.filename, sourceId: e.sourceId, size: e.size, sha256: e.sha256, processingStatus: e.processingStatus })),
+    generatedAt: new Date().toISOString(),
+    disclaimer: 'Findings are observations checked against the rules pinned for this inspection. They do not establish crack depth, leak tightness or bolt torque. This dossier is not a certification or a release; a quality engineer must review and sign it.',
+  };
+}
+
 function dossierHtml(insp: any, partial: boolean) {
   const snap = snapshotFor(insp);
   const rules = sessionRules(insp);
@@ -323,7 +348,24 @@ export async function buildServer() {
       db = { ...emptyDB(), ...(fromMongo || {}) } as DB;
       fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
       console.log('[argus] MongoDB connected; collections synced');
-    } catch (e: any) { console.error('[argus] MongoDB connect failed, using local store:', e?.message || e); }
+    } catch (e: any) {
+      console.error('[argus] MongoDB connect failed, using local store; retrying every 30 s:', e?.message || e);
+      // Keep trying: when MongoDB becomes reachable (e.g. after an IP
+      // allow-list change), merge what was recorded meanwhile into it
+      // instead of overwriting either side.
+      const retry = setInterval(async () => {
+        try {
+          await mongoStore.connect();
+          clearInterval(retry);
+          const remote = await mongoStore.loadState();
+          db = { ...emptyDB(), ...mergeStates(db as any, (remote || emptyDB()) as any) } as DB;
+          await mongoStore.syncState(db as any);
+          saveDB(db);
+          console.log('[argus] MongoDB connected after retry; local and stored state merged');
+        } catch { /* still unreachable */ }
+      }, Number(process.env.MONGO_RETRY_MS || 30000));
+      retry.unref?.();
+    }
   }
   const INSPECTION_URL = process.env.INSPECTION_SERVICE_URL || 'http://localhost:8100';
   const EVIDENCE_BASE = process.env.EVIDENCE_BASE_URL || 'http://localhost:8000';
@@ -368,7 +410,7 @@ export async function buildServer() {
   }
 
   const queue = new AnalysisQueue(
-    { visual: Number(process.env.ANALYSIS_CONCURRENCY || 3), geometry: 1, tracking: 1 },
+    { visual: Number(process.env.ANALYSIS_CONCURRENCY || 6), geometry: 1, tracking: 1 },
     (job: Job) => {
       const insp = getInsp(job.sessionId);
       const ev = job.evidenceId ? db.evidence.find(e => e.evidenceId === job.evidenceId && e.sessionId === job.sessionId) : null;
@@ -421,6 +463,37 @@ export async function buildServer() {
       req.on('close', () => { clearTimeout(timer); signal?.removeEventListener('abort', onAbort); });
       req.end(payload);
     });
+  }
+
+  /** POST JSON, expect bytes back (the ReportAgent's PDF). */
+  function postForBytes(url: string, body: any, timeoutMs = 120000): Promise<Buffer> {
+    return new Promise((resolve, reject) => {
+      const u = new URL(url); const payload = Buffer.from(JSON.stringify(body));
+      const req = (u.protocol === 'https:' ? https : http).request(u, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': payload.length } }, res => {
+        const chunks: Buffer[] = []; res.on('data', c => chunks.push(c));
+        res.on('end', () => (res.statusCode || 0) >= 400 ? reject(new Error(`${u.pathname} ${res.statusCode}`)) : resolve(Buffer.concat(chunks)));
+        res.on('error', reject);
+      });
+      const timer = setTimeout(() => req.destroy(new Error(`${u.pathname} timed out`)), timeoutMs);
+      req.on('error', reject); req.on('close', () => clearTimeout(timer)); req.end(payload);
+    });
+  }
+
+  /** Dossier PDF via the ReportAgent; stored next to the HTML. */
+  async function buildDossierPdf(insp: any): Promise<string | null> {
+    const d = db.dossiers.find(x => x.sessionId === insp.id); if (!d) return null;
+    try {
+      const pdf = await postForBytes(`${INSPECTION_URL}/dossier/pdf`, dossierData(insp, !!d.partial));
+      if (!pdf.subarray(0, 4).equals(Buffer.from('%PDF'))) throw new Error('not a PDF');
+      const file = path.join(DATA, 'dossiers', `${insp.id}.pdf`);
+      fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, pdf);
+      Object.assign(d, { pdfPath: path.relative(DATA, file), pdfSize: pdf.length, pdfSha256: sha256(pdf), pdfError: null });
+      saveDB(db); return file;
+    } catch (e: any) {
+      d.pdfError = String(e?.message || e).slice(0, 200); saveDB(db);
+      logger.info('dossier.pdf_failed', { sessionId: insp.id, reason: d.pdfError });
+      return null;
+    }
   }
 
   /** One photo or video segment: SAM routing + Muse screening against the
@@ -564,6 +637,7 @@ export async function buildServer() {
     const html = dossierHtml(insp, terminated); const dir = path.join(DATA, 'dossiers'); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, `${insp.id}.html`), html);
     db.dossiers = db.dossiers.filter(d => d.sessionId !== insp.id);
     db.dossiers.push({ sessionId: insp.id, partial: terminated, outcome: insp.outcome, size: Buffer.byteLength(html), at: insp.closedAt, htmlPath: path.relative(DATA, path.join(dir, `${insp.id}.html`)), sha256: sha256(html) });
+    await buildDossierPdf(insp);
     emit(db, insp.id, 'inspection.closed', { lifecycleStatus: insp.lifecycleStatus, outcome: insp.outcome }); emit(db, insp.id, 'dossier.ready', {}); saveDB(db);
     logger.info('inspection.closed', { sessionId: insp.id, lifecycleStatus: insp.lifecycleStatus, outcome: insp.outcome, incomplete: leftover.length });
   }
@@ -609,7 +683,7 @@ export async function buildServer() {
 
   const app = Fastify();
   await app.register(multipart, { limits: { fileSize: 200 * 1024 * 1024 } });
-  app.get('/api/v1/health', async () => ({ ok: true, storage: storageMode }));
+  app.get('/api/v1/health', async () => ({ ok: true, storage: { ...storageMode, mongoConfigured: storageMode.mongo, mongo: mongoStore.connected } }));
   app.get('/api/v1/cad-models/:model_id/reference.ply', async (req: any, reply) => {
     const model = modelFor(req.params.model_id);
     const file = model && cadReferencePath(model);
@@ -636,6 +710,8 @@ export async function buildServer() {
     const order = upload ? await attachOrderDocument(insp, upload.filename, upload.buf) : null;
     pinSnapshot(insp, order);
     emit(db, insp.id, 'inspection.created', { referenceSnapshotId: insp.referenceSnapshotId }); saveDB(db);
+    // Warm SAM 3.1 while the operator starts the feed (fire and forget).
+    postJson(`${INSPECTION_URL}/warmup`, {}, undefined, 10000).catch(() => {});
     logger.info('inspection.created', { sessionId: insp.id, model_id: insp.model_id, orderDocument: !!order });
     return reply.code(201).send(insp);
   });
@@ -772,7 +848,7 @@ export async function buildServer() {
     for (const d of db.documents.filter(x => x.sessionId === insp.id && x.documentId === snap.orderDocument?.documentId)) {
       docs.push({ docId: d.documentId, name: d.name, type: 'order', kind: 'Customer specification', size: d.size, source: d.extraction?.status === 'parsed' ? `Uploaded · ${d.extraction.orderNumber || 'order'} · ${d.extraction.ruleCount} rules read` : `Uploaded · rules could not be read`, at: d.at, when: '00:00', sha256: d.sha256, path: path.join(DATA, d.storagePath), mime: ({ '.pdf': 'application/pdf', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' } as any)[path.extname(d.name).toLowerCase()] || 'application/octet-stream' });
     }
-    for (const d of db.dossiers.filter(x => x.sessionId === insp.id)) docs.push({ docId: 'dossier', name: `${insp.id}_dossier.html`, type: 'Report', kind: 'Report', size: d.size, source: 'Generated at closure', at: d.at, when: 'At closure', sha256: d.sha256 || null, path: dossierFile(d), mime: 'text/html' });
+    for (const d of db.dossiers.filter(x => x.sessionId === insp.id)) docs.push({ docId: 'dossier', name: `${insp.id}_dossier.pdf`, type: 'Report', kind: 'Report (PDF)', size: d.pdfSize || d.size, source: 'Generated at closure by the ReportAgent', at: d.at, when: 'At closure', sha256: d.pdfSha256 || d.sha256 || null, path: d.pdfPath ? path.join(DATA, d.pdfPath) : dossierFile(d), mime: d.pdfPath ? 'application/pdf' : 'text/html' });
     return docs;
   }
   app.get('/api/v1/inspections/:id/documents', async (req: any, reply) => {
@@ -880,6 +956,14 @@ export async function buildServer() {
   app.post('/api/v1/inspections/:id/close', close(false));
   app.post('/api/v1/inspections/:id/terminate', close(true));
   app.get('/api/v1/inspections/:id/dossier', async (req: any, reply) => { const d = db.dossiers.find((x: any) => x.sessionId === req.params.id); if (!d) return reply.code(404).send({ error: 'no dossier' }); return { ...d, html: fs.readFileSync(dossierFile(d), 'utf8') }; });
+  app.get('/api/v1/inspections/:id/dossier.pdf', async (req: any, reply) => {
+    const insp = getInsp(req.params.id); const d = db.dossiers.find((x: any) => x.sessionId === req.params.id);
+    if (!insp || !d) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'No dossier yet: end or terminate the inspection first' } });
+    let file = d.pdfPath ? path.join(DATA, d.pdfPath) : null;
+    if (!file || !fs.existsSync(file)) file = await buildDossierPdf(insp);   // older dossiers: build on demand
+    if (!file) return reply.code(503).send({ error: { code: 'PDF_UNAVAILABLE', message: `The dossier PDF could not be generated: ${d.pdfError || 'report service unavailable'}` } });
+    return reply.type('application/pdf').header('Content-Disposition', `attachment; filename="${insp.id}_dossier.pdf"`).send(fs.createReadStream(file));
+  });
   app.get('/api/v1/reports', async () => ({
     reports: db.dossiers.map((d: any) => {
       const insp = db.inspections.find((i: any) => i.id === d.sessionId);

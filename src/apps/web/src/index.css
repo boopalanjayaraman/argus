@@ -1,1 +1,14 @@
 @import "tailwindcss";
+
+/* Live findings feed: a new or updated finding arrives highlighted and
+   fades to the normal row over ~4 s; analysis in progress pulses. */
+@keyframes feed-flash {
+  0%   { background: rgba(165, 148, 255, 0.28); box-shadow: inset 3px 0 0 #A594FF; }
+  60%  { background: rgba(165, 148, 255, 0.12); box-shadow: inset 3px 0 0 rgba(165, 148, 255, 0.6); }
+  100% { background: transparent; box-shadow: inset 3px 0 0 transparent; }
+}
+.feed-flash { animation: feed-flash 4s ease-out 1; }
+@keyframes feed-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+.feed-pulse { animation: feed-pulse 1.4s ease-in-out infinite; }
+.feed-analyzing { background: rgba(122, 184, 255, 0.06); }
+@media (prefers-reduced-motion: reduce) { .feed-flash, .feed-pulse { animation: none; } }

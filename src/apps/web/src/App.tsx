@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { lazy, Suspense } from 'react';
 import type { Viewer } from './ViewerDialog';
 const ViewerDialog = lazy(() => import('./ViewerDialog'));
@@ -57,17 +57,49 @@ export default function App() {
     if (page !== 'session' || !current) return;
     const id = current.id; let stopped = false; let timer: any = null;
     const load = async () => {
-      const [i, ev, rs, docs, hist] = await Promise.all([api(`/api/v1/inspections/${id}`), api(`/api/v1/inspections/${id}/evidence`), api(`/api/v1/inspections/${id}/rules`), api(`/api/v1/inspections/${id}/documents`), api(`/api/v1/inspections/${id}/history`)]);
-      if (stopped) return; setCurrent(i); setEvidence(ev); setSessionRules(rs); setDocuments(docs); setHistory(hist);
+      // Each part refreshes on its own: one failed request must not freeze
+      // the page on its last state (a stale "Analyzing" was seen in the cloud).
+      const [i, ev, rs, docs, hist] = await Promise.allSettled([api(`/api/v1/inspections/${id}`), api(`/api/v1/inspections/${id}/evidence`), api(`/api/v1/inspections/${id}/rules`), api(`/api/v1/inspections/${id}/documents`), api(`/api/v1/inspections/${id}/history`)]);
+      if (stopped) return;
+      const ok = (r: PromiseSettledResult<any>) => r.status === 'fulfilled' && r.value && !r.value.error;
+      if (ok(i)) setCurrent((i as any).value);
+      if (ok(ev) && Array.isArray((ev as any).value)) setEvidence((ev as any).value);
+      if (ok(rs)) setSessionRules((rs as any).value);
+      if (ok(docs)) setDocuments((docs as any).value);
+      if (ok(hist)) setHistory((hist as any).value);
     };
     const soon = () => { clearTimeout(timer); timer = setTimeout(() => { load().catch(() => {}); }, 200); };
     load().catch(() => {});
     // A closed session is frozen: no live stream, just the slow reconciliation poll.
     const es = ['COMPLETED', 'TERMINATED'].includes(current.lifecycleStatus) ? null : new EventSource(`/api/v1/inspections/${id}/events`);
     if (es) es.onmessage = soon;
-    const poll = setInterval(() => { load().catch(() => {}); }, 15000);
+    const poll = setInterval(() => { load().catch(() => {}); }, 10000);
     return () => { stopped = true; es?.close(); clearInterval(poll); clearTimeout(timer); };
   }, [page, current?.id]);
+
+  // Findings that arrive while the page is open get a short highlight;
+  // what was already there when the session opened does not flash.
+  // Home keeps its list current (lifecycle, outcome, findings) while open.
+  useEffect(() => {
+    if (page !== 'home') return;
+    loadHome().catch(() => {});
+    const t = setInterval(() => { loadHome().catch(() => {}); }, 10000);
+    return () => clearInterval(t);
+  }, [page]);
+
+  // Tracked during render (idempotent), so a new finding is drawn
+  // highlighted on the very render that first shows it.
+  const seen = useRef<{ session: string; ready: boolean; fresh: Set<string>; known: Set<string> }>({ session: '', ready: false, fresh: new Set(), known: new Set() });
+  if (current && sessionRules && String(sessionRules.snapshot?.snapshotId || '').startsWith(`ref-${current.id}-`)) {
+    const st = seen.current;
+    if (st.session !== current.id) { st.session = current.id; st.ready = false; st.fresh = new Set(); st.known = new Set(); }
+    for (const r of (sessionRules.rules || [])) {
+      if (!r.finding) continue;
+      const k = `${r.ruleId}:${r.finding.revision ?? 0}`;
+      if (!st.known.has(k)) { st.known.add(k); if (st.ready) st.fresh.add(k); }
+    }
+    st.ready = true;
+  }
 
   const create = async () => {
     setFormNote('');
@@ -124,7 +156,12 @@ export default function App() {
     { label: 'laser-01', items: pcs, c: '#5AC8D8', state: trackState },
     { label: 'analysis', items: evidence.filter((e: any) => e.processingStatus === 'done'), c: '#A594FF', state: current.lifecycleStatus === 'WAITING' ? 'Idle' : closed ? 'Done' : current.analysis?.pending ? `${current.analysis.pending} running` : 'Idle' }
   ] : [];
-  const liveRules = (sessionRules?.rules || []).filter((r: any) => !['NOT_INSPECTED', 'NOT_APPLICABLE'].includes(r.status));
+  // Live feed: newest result first, so a fresh finding is always in view.
+  const liveRules = (sessionRules?.rules || []).filter((r: any) => !['NOT_INSPECTED', 'NOT_APPLICABLE'].includes(r.status))
+    .sort((a: any, b: any) => String(b.finding?.at || '').localeCompare(String(a.finding?.at || '')));
+  const sinceStart = (iso?: string) => { if (!iso || !current) return ''; const s = Math.max(0, Math.round((new Date(iso).getTime() - new Date(current.createdAt).getTime()) / 1000)); return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`; };
+  const feedKey = (r: any) => `${r.ruleId}:${r.finding?.revision ?? 0}`;
+  const analyzingNow = evidence.filter((e: any) => e.processingStatus === 'processing');
   const geo: any = current?.geometry || null;
   const geoText = !geo ? '' : geo.status === 'running' ? 'Comparing with CAD\u2026'
     : geo.status === 'valid' ? `Comparison succeeded${geo.coverage !== undefined ? ` \u00B7 Coverage ${Math.round(geo.coverage * 100)}%` : ''}`
@@ -143,7 +180,9 @@ export default function App() {
   const appRules = (sessionRules?.rules || []).filter((r: any) => r.status !== 'NOT_APPLICABLE');
   const ruleSections = [...new Set<string>(appRules.map((r: any) => r.section || 'Rules'))].map((name) => ({ name, rows: appRules.filter((r: any) => (r.section || 'Rules') === name) }));
   const ruleNo = (r: any) => r.code || r.ruleId;
-  const downloadDossier = async () => { const j = await api(`/api/v1/inspections/${current.id}/dossier`); const blob = new Blob([j.html || ''], { type: 'text/html' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${current.id}_dossier.html`; a.click(); URL.revokeObjectURL(a.href); };
+  // Dossier export is a PDF prepared by the ReportAgent at closure.
+  const pdfDownload = (sessionId: string) => { const a = document.createElement('a'); a.href = `/api/v1/inspections/${sessionId}/dossier.pdf`; a.download = `${sessionId}_dossier.pdf`; a.click(); };
+  const downloadDossier = () => pdfDownload(current.id);
   const badgeFor = (s: string) => s === 'PASS' ? 'ar-badge pass' : s === 'FAIL' ? 'ar-badge fail' : s === 'WARNING' ? 'ar-badge warn' : 'ar-badge info';
 
 
@@ -162,7 +201,8 @@ export default function App() {
         <main className="ar-rules">
           <header className="ar-rhead"><div className="ar-rwrap">
             <div className="ar-bar" style={{ gap: '10px 12px' }}>
-              <h1 className="ar-h1" style={{ fontSize: 26, marginRight: 12 }}>Inspection Rules</h1>
+              <h1 className="ar-h1" style={{ fontSize: 26, marginRight: 4 }}>Inspection Rules</h1>
+              <span className="ar-badge plain" style={{ marginRight: 12 }}>{rules?.counts?.rules ?? 0} rules · {rules?.counts?.documents ?? 0} documents</span>
               <div className="ar-search" style={{ flex: '1 1 280px' }}>
                 <svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d={SEARCH_ICON} /></svg>
                 <label htmlFor="rule-search" className="ar-sr">Search all rules</label>
@@ -200,8 +240,8 @@ export default function App() {
                     <span className="ar-micro">{r.evidence}</span>
                     <svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true" style={{ color: '#8D93A8', marginTop: 2 }}><path d="m5 9 7 7 7-7H5Z" /></svg>
                   </button>
-                  {openRule === r.ruleId + r.document && <div className="ar-rule-body"><div className="ar-rule-main"><div className="ar-quote" style={{ whiteSpace: 'pre-line', fontSize: 14 }}>{r.text}</div></div>
-                    <dl className="ar-dl ar-rule-meta"><dt>Source</dt><dd>{r.source} ({r.document})</dd>{r.reference && <><dt>Reference</dt><dd>{r.reference}</dd></>}<dt>Applies to</dt><dd>{r.stage}</dd></dl></div>}
+                  {openRule === r.ruleId + r.document && <div className="ar-rule-body"><div className="ar-rule-main"><div className="ar-quote" style={{ whiteSpace: 'pre-line', fontSize: 14, overflowWrap: 'anywhere' }}>{r.text}</div></div>
+                    <dl className="ar-dl ar-rule-meta" style={{ minWidth: 0, overflowWrap: 'anywhere' }}><dt>Source</dt><dd>{r.source} ({r.document})</dd>{r.reference && <><dt>Reference</dt><dd>{r.reference}</dd></>}<dt>Applies to</dt><dd>{r.stage}</dd></dl></div>}
                 </article>)}
               </section>)}
               {!visibleSections.length && <div className="ar-empty"><strong>{rules ? 'No rules match' : 'Loading rules...'}</strong><span>{rules ? 'Try another search or clear the filters.' : ''}</span>{(ruleQ || ruleEv) && <button type="button" className="ar-btn secondary sm" style={{ marginTop: 8 }} onClick={() => { setRuleQ(''); setRuleEv(''); }}>Clear filters</button>}</div>}
@@ -342,7 +382,7 @@ export default function App() {
         </main></div>
         : tab === 'Dossier' ? (() => { const tone = ({ PASS: ['#0B6B4B', '#FFF'], WARNING: ['#FFB547', '#2A1B00'], FAIL: ['#8E2318', '#FFF'], INCONCLUSIVE: ['#2E3A73', '#FFF'], PENDING: ['#2E3A73', '#FFF'] } as any)[current.outcome] || ['#2E3A73', '#FFF']; const notInspected = (sessionRules?.rules || []).filter((r: any) => ['NOT_INSPECTED', 'NOT_APPLICABLE'].includes(r.status)).length; const insuff = (sessionRules?.rules || []).filter((r: any) => r.status === 'INSUFFICIENT_EVIDENCE').length; const regDocs = allDocs.filter((d: any) => d.type !== 'Report' && docCat(d) !== 'Specifications'); return <div className="ar-scroll"><main className="ar-page" style={{ paddingTop: 20, maxWidth: 1028 }}>
           <div className="ar-bar" style={{ justifyContent: 'flex-end' }}>
-            <button type="button" className="ar-btn secondary" onClick={downloadDossier}><svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16" /></svg>Download dossier</button>
+            <button type="button" className="ar-btn secondary" onClick={downloadDossier}><svg className="ar-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v12M7 11l5 5 5-5M4 20h16" /></svg>Download PDF</button>
           </div>
           <article className="ar-paper">
             {current.lifecycleStatus === 'TERMINATED' && <div className="ar-paper-banner">Partial dossier. This inspection was terminated early, so evidence and checks are incomplete.</div>}
@@ -436,7 +476,7 @@ export default function App() {
             </section>
           </div>
 
-          <aside className="ar-panel" aria-label="Inspection stage and findings">
+          <aside className="ar-panel" aria-label="Inspection stage and findings" style={closed ? undefined : { flexBasis: 'clamp(420px, 36%, 620px)' }}>
             <section className="ar-stage" aria-label="Current stage">
               <ol className="ar-steps">
                 {steps.map((s: any) => <li key={s.label} className={s.cls}><i></i>{s.label}</li>)}
@@ -460,7 +500,6 @@ export default function App() {
                   {geo.scanPoints && <span className="ar-micro">{geo.scanPoints.toLocaleString()} scan points · {geo.chunks} chunks · merged scan</span>}
                 </> : <span className="ar-micro">Not run yet. Runs automatically as scan chunks arrive.</span>}
               </div>}
-              {current.lifecycleStatus === 'WAITING' && <button type="button" className="ar-btn secondary sm" onClick={() => window.open(`http://${location.hostname}:4173`, '_blank')}>Prototype: run simulated feed</button>}
               {closed && <div className="ar-bar" style={{ justifyContent: 'space-between' }}>
                 <span className={outcomeClass(current.outcome)}>Outcome: {titleCase(current.outcome)}</span>
                 <button type="button" className="ar-btn secondary sm" onClick={() => setTab('Dossier')}>Open Dossier</button>
@@ -476,10 +515,19 @@ export default function App() {
                 </div>
               </div>
               <div className="ar-feed">
-                {liveRules.slice(0, 8).map((r: any) => <article key={r.ruleId} className="ar-finding" data-open="false">
+                {analyzingNow.map((e: any) => <article key={`an-${e.evidenceId}`} className="ar-finding feed-analyzing" data-open="false">
                   <div className="ar-finding-head" style={{ cursor: 'default' }}>
                     <span style={{ minWidth: 0 }}>
-                      <span className="ar-finding-meta"><span className={badgeFor(r.status)}>{titleCase(r.status)}</span><span className="ar-mono ar-micro">Rule {ruleNo(r)}</span></span>
+                      <span className="ar-finding-meta" style={{ justifyContent: 'flex-start' }}><span className="ar-badge info"><span className="feed-pulse">Analyzing…</span></span><span className="ar-mono ar-micro">{e.mediaType === 'video' ? 'Video segment' : 'Photograph'}</span></span>
+                      <span className="ar-finding-title">{e.filename}</span>
+                      <span className="ar-finding-cap">SAM 3.1 is finding the valve parts in view; Muse is checking them against the rules.</span>
+                    </span>
+                  </div>
+                </article>)}
+                {liveRules.slice(0, 40).map((r: any) => <article key={feedKey(r)} className={`ar-finding${seen.current.fresh.has(feedKey(r)) ? ' feed-flash' : ''}`} data-open="false">
+                  <div className="ar-finding-head" style={{ cursor: 'default' }}>
+                    <span style={{ minWidth: 0 }}>
+                      <span className="ar-finding-meta" style={{ justifyContent: 'flex-start' }}><span className={badgeFor(r.status)}>{titleCase(r.status)}</span><span className="ar-mono ar-micro">Rule {ruleNo(r)}</span><span className="ar-mono ar-micro" style={{ marginLeft: 'auto' }}>{sinceStart(r.finding?.at)}</span></span>
                       <span className="ar-finding-title">{r.title}</span>
                       <span className="ar-finding-cap">{r.finding?.reason || 'Evidence received. Comparing it with the rule.'}</span>
                     </span>
@@ -610,7 +658,7 @@ export default function App() {
               <span className="ar-micro">{r.findings?.total ? ([r.findings.pass && `${r.findings.pass} Pass`, r.findings.warning && `${r.findings.warning} Warning`, r.findings.fail && `${r.findings.fail} Fail`].filter(Boolean).join(' · ') || 'No passed checks yet') : 'No findings yet'}</span>
               <span className="ar-bar" style={{ justifyContent: 'flex-end', gap: 8 }}>
                 <button type="button" className="ar-btn secondary sm" onClick={async () => { const i = await api(`/api/v1/inspections/${r.sessionId}`); if (i?.id) { setCurrent(i); setTab('Dossier'); setPage('session'); } }}>View</button>
-                <button type="button" className="ar-btn ghost sm" onClick={async () => { const j = await api(`/api/v1/inspections/${r.sessionId}/dossier`); const blob = new Blob([j.html || ''], { type: 'text/html' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${r.sessionId}_dossier.html`; a.click(); URL.revokeObjectURL(a.href); }}>Download</button>
+                <button type="button" className="ar-btn ghost sm" onClick={() => pdfDownload(r.sessionId)}>Download PDF</button>
               </span></div>)}
           </div></div>
           {!filteredReports.length && (reports.length ? <div className="ar-empty"><strong>No reports match</strong><span>Try another name or clear the filter.</span></div> : <div className="ar-empty"><strong>No reports to display</strong><span>Complete an inspection and its dossier will appear here. Create one from Home to get started.</span></div>)}

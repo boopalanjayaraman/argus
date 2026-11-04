@@ -72,7 +72,9 @@ services:
     environment:
       PORT: "8000"
       MONGODB_URI: ${MONGODB_URI:?Set MONGODB_URI in .env to your MongoDB Atlas connection string}
-      MONGODB_DB: ${MONGODB_DB:-argus}
+      # Local stack keeps its own database; the cloud deployment uses `argus`.
+      # The API replaces whole collections on save, so two stacks must never share one.
+      MONGODB_DB: ${MONGODB_DB:-argus-local}
       GCS_BUCKET: ${GCS_BUCKET:-}
       GCP_PROJECT_ID: ${GCP_PROJECT_ID:-}
       GCP_LOG_NAME: ${GCP_LOG_NAME:-argus}
@@ -81,7 +83,7 @@ services:
       INSPECTION_SERVICE_URL: http://orchestrator:8100
       EVIDENCE_BASE_URL: http://api:8000
       ARGUS_INGEST_TOKEN: ${ARGUS_INGEST_TOKEN:-}
-      ANALYSIS_CONCURRENCY: ${ANALYSIS_CONCURRENCY:-3}
+      ANALYSIS_CONCURRENCY: ${ANALYSIS_CONCURRENCY:-6}
       VIDEO_ANALYSIS_EVERY: ${VIDEO_ANALYSIS_EVERY:-4}
       CLOSE_DRAIN_TIMEOUT_MS: ${CLOSE_DRAIN_TIMEOUT_MS:-120000}
       MAX_ORDER_UPLOAD_MB: ${MAX_ORDER_UPLOAD_MB:-25}

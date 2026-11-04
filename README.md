@@ -11,19 +11,20 @@ Built for the Meta "Push the Frontier" hackathon on Meta's Muse Spark, Muse Wond
 ## Contents
 
 1. [The problem: batch size of one](#1-the-problem-batch-size-of-one)
-2. [Why it is a problem today, and what it costs](#2-why-it-is-a-problem-today-and-what-it-costs)
-3. [Continuous, multi-stage inspection](#3-continuous-multi-stage-inspection)
-4. [How Argus solves it](#4-how-argus-solves-it)
-5. [What you see in the product](#5-what-you-see-in-the-product)
-6. [How we collected the data](#6-how-we-collected-the-data)
-7. [Meta models: why they matter and how we used each one](#7-meta-models-why-they-matter-and-how-we-used-each-one)
-8. [Architecture](#8-architecture)
-9. [Tech stack](#9-tech-stack)
-10. [Running it locally](#10-running-it-locally)
-11. [Deployment](#11-deployment)
-12. [What we learned](#12-what-we-learned)
-13. [Status, limits and roadmap](#13-status-limits-and-roadmap)
-14. [Repository map and documents](#14-repository-map-and-documents)
+2. [Where Argus applies: ETO and high-mix industries](#2-where-argus-applies-eto-and-high-mix-industries)
+3. [Why it is a problem today, and what it costs](#3-why-it-is-a-problem-today-and-what-it-costs)
+4. [Continuous, multi-stage inspection](#4-continuous-multi-stage-inspection)
+5. [How Argus solves it](#5-how-argus-solves-it)
+6. [What you see in the product](#6-what-you-see-in-the-product)
+7. [How we collected the data](#7-how-we-collected-the-data)
+8. [Meta models: why they matter and how we used each one](#8-meta-models-why-they-matter-and-how-we-used-each-one)
+9. [Architecture](#9-architecture)
+10. [Tech stack](#10-tech-stack)
+11. [Running it locally](#11-running-it-locally)
+12. [Deployment](#12-deployment)
+13. [What we learned](#13-what-we-learned)
+14. [Status, limits and roadmap](#14-status-limits-and-roadmap)
+15. [Repository map and documents](#15-repository-map-and-documents)
 
 ---
 
@@ -37,7 +38,27 @@ Existing approaches do not fit:
 - **Conventional vision AI** (YOLO-style defect classifiers) needs thousands of images of good and bad parts. For a unit that has never existed before, there are zero training images.
 - **Metrology today is semi-manual.** Plants own 3D scanners, CMM arms and digital travelers, but a quality engineer still imports the CAD by hand, aligns each scan to it by hand, and cross-references paper checklists and work orders — 45 to 60 minutes per check, once, late in the build.
 
-## 2. Why it is a problem today, and what it costs
+## 2. Where Argus applies: ETO and high-mix industries
+
+Argus fits wherever equipment is **engineered or built to a customer's specification**, in quantities of one or a few, at high unit value — so every unit must be verified against its own design and order, and a missed defect is expensive, dangerous or both:
+
+| Industry | Typical one-off or low-volume assets | Why inspection matters |
+|---|---|---|
+| **Industrial valves and flow control** | Large severe-service valves (gate, globe, check, ball, control), actuated assemblies, custom trims | Pressure-boundary failures; FAT teardown; field blow-outs (the demo case) |
+| **Oil and gas, petrochemical** | Wellheads, subsea manifolds and trees, compressors, pressure vessels, skid packages | Sour and high-pressure service; offshore rework is extremely costly |
+| **Power generation** | Steam and gas turbines, generators, boiler and nuclear-island components, hydro turbines | Long outages and safety cases; strict code compliance (ASME, nuclear QA) |
+| **Pumps, compressors and turbomachinery** | Engineered pumps, impellers, casings, rotors, gearboxes | Custom hydraulics and metallurgy; balance and clearance errors surface late |
+| **Defence** | Naval systems, armoured-vehicle structures, weapon-system and ordnance components, ground-support equipment | Mission-critical, low-volume, heavily specified; full traceability required |
+| **Aerospace and space** | Engine components, landing gear, structural assemblies, launch-vehicle and satellite hardware, MRO repairs | Zero-defect tolerance; first-article and per-unit inspection; documentation-heavy release |
+| **Shipbuilding and marine** | Propulsion shafts and propellers, steering gear, hull modules, offshore structures | Very large one-off parts; class-society inspection at every stage |
+| **Heavy machinery, mining and cement** | Crushers, mills, kilns, large castings and forgings, presses | Huge castings where a void found after machining wastes weeks |
+| **Energy transmission and grid** | Power transformers, switchgear, HV/HVDC components | Custom-rated units; failures cascade across the grid |
+| **Rail and transport** | Bogies, traction equipment, special-purpose vehicles | Safety-critical, specified per operator |
+| **Process plants and capital equipment** | Heat exchangers, reactors, columns, semiconductor and pharma process tools | Built to the plant's process data sheet; failures halt production |
+
+What these share is exactly what Argus is built for: **batch size of one, a CAD model and a customer specification per unit, staged manufacturing, and evidence (photos, video, 3D scans) that is already captured but checked manually and late.** The same pipeline — pinned CAD and rules, live evidence, part detection, rule-by-rule reading and a deterministic decision — carries over by adding the equipment family's parts and rules; the valve is the first case.
+
+## 3. Why it is a problem today, and what it costs
 
 Inspection usually happens at the end: factory acceptance testing (FAT) or a final visual check before dispatch. By then the casting is machined, the bonnet is torqued shut, the body is painted and the nameplate is riveted on. A mistake found there is expensive, and a mistake missed there can be catastrophic:
 
@@ -50,7 +71,7 @@ Inspection usually happens at the end: factory acceptance testing (FAT) or a fin
 
 The earlier a deviation is caught, the cheaper it is — but nobody can afford a quality engineer standing at every station of a one-off build.
 
-## 3. Continuous, multi-stage inspection
+## 4. Continuous, multi-stage inspection
 
 Argus inspects **the same asset again and again as it is built**, each time against the CAD available for that stage of assembly and the rules that belong to that stage:
 
@@ -66,7 +87,7 @@ Argus inspects **the same asset again and again as it is built**, each time agai
 
 **In the demo** the same valve is inspected at two stages: **Scenario 1 — during build** (grey, before finishing, no nameplate) and **Scenario 2 — finished** (painted and nameplated). Uploading the work order with each inspection groups them automatically; the finished stage surfaces what the build stage could not show yet — for example a nameplate that does not match the work order.
 
-## 4. How Argus solves it
+## 5. How Argus solves it
 
 Argus inspects against **design intent** instead of training data:
 
@@ -81,7 +102,7 @@ Argus inspects against **design intent** instead of training data:
 
 Everything runs live: the operator watches findings appear while the evidence is still streaming.
 
-## 5. What you see in the product
+## 6. What you see in the product
 
 - **Home** — every inspection with lifecycle, outcome and a findings bar; inspections of the same work order / asset are grouped and listed in stage order. Start an inspection by name, CAD model and optional work order.
 - **Inspection Rules** — the indexed rule library (161 rules from 19 documents), searchable by stage, section and evidence type.
@@ -94,7 +115,7 @@ Everything runs live: the operator watches findings appear while the evidence is
 
 The companion **Argus Simulator** (separate repository) streams prepared evidence to a chosen inspection, per source in parallel, with retry and stop.
 
-## 6. How we collected the data
+## 7. How we collected the data
 
 All data is **public or synthetic — no proprietary or customer data**.
 
@@ -108,7 +129,7 @@ All data is **public or synthetic — no proprietary or customer data**.
 
 The simulator only sends files — it never sends ground truth, defect labels or expected results.
 
-## 7. Meta models: why they matter and how we used each one
+## 8. Meta models: why they matter and how we used each one
 
 In ETO there is nothing to train on, so the models must work **zero-shot**: find a nameplate they have never seen, on a valve that has never existed, and read it against rules they are given at run time. Meta's models do the perception and reading; deterministic code does the deciding.
 
@@ -122,7 +143,7 @@ In ETO there is nothing to train on, so the models must work **zero-shot**: find
 
 What the models never do: issue verdicts, invent tolerances or citations, measure millimetres, or release a product. Those stay with the deterministic rule gate, the geometry code and the human reviewer.
 
-## 8. Architecture
+## 9. Architecture
 
 ```mermaid
 flowchart TB
@@ -169,7 +190,7 @@ flowchart TB
 - One **deterministic rule gate** issues every verdict.
 - The original v0.9 design diagram is kept at [`docs/architecture/Argus_Architecture_Diagram.png`](docs/architecture/Argus_Architecture_Diagram.png); the current design is described in [Agentic Architecture v1.0](docs/architecture/Argus_Agentic_Architecture.md).
 
-## 9. Tech stack
+## 10. Tech stack
 
 | Layer | Technology |
 |---|---|
@@ -181,7 +202,7 @@ flowchart TB
 | Ops | Docker / Docker Compose (6 containers + simulator), Google Cloud Logging (structured logs), Google Cloud Run (target deployment) |
 | Tests | Vitest (API 38, web 10, simulator 9), pytest (48) — including a recorded live SAM 3.1 image stream and video stream |
 
-## 10. Running it locally
+## 11. Running it locally
 
 Requirements: Docker Desktop, a Meta Model API key, and (optionally) a MongoDB Atlas URI and a GCS bucket.
 
@@ -206,12 +227,28 @@ Demo walkthrough:
 
 Without Docker: `npm start` in `argus` (API + web on :8000) and `scripts/run_inspection.sh` (orchestrator + agents; needs the Python venv in `src/services/inspection/.venv`). Tests: `npm test`.
 
-## 11. Deployment
+## 12. Deployment
 
 - **Today:** Docker Compose on one machine; MongoDB Atlas and GCS in the cloud; Cloud Logging when GCP credentials are present.
 - **Target:** Google Cloud — Cloud Run for the API, orchestrator, three agents and the simulator; Artifact Registry; Secret Manager; a Cloud Storage bucket mounted into the API; Direct VPC egress with Cloud NAT for a static outbound IP (MongoDB Atlas allow-list, Meta API). Step-by-step guide: **[docs/deployment/GCP_Deployment.md](docs/deployment/GCP_Deployment.md)**.
 
-## 12. What we learned
+## 13. What we learned
+
+**By the numbers (Meta Model API usage while building and testing Argus)**
+
+| Measure | Value |
+|---|---|
+| Video frames segmented by SAM 3.1 | ~7,700 |
+| Images segmented by SAM 3.1 | 996 |
+| API requests | ~4,000 |
+| Input tokens | ~6.6 M |
+| Output tokens | ~3.5 M |
+| Muse image call latency | 9–13.5 s on average per call |
+| SAM 3.1 image concept latency | ~2 s median once warm; ~60–80 s on a cold first call |
+| Full inspection (one scenario: 12 photos, 5 sampled video segments, 16 scan chunks) | ~12 min with 3 items analysed in parallel → **~5.5 min with 6** |
+
+- **Latency, not rate limits, sets the pace.** The API reports 3,000 requests and 4 M tokens per window; a burst of 30 parallel Muse calls all returned in ~15 s. One inspection makes a few hundred Muse calls (one per routed rule per photo or video keyframe, plus reviews), so the run time is decided by how many calls are in flight at once — doubling analysis parallelism halved the run.
+- **Count calls before optimising code.** Every routed rule is one ~10 s call; the next large saving is fewer calls (several rules per image in one call, skipping rules already passed), not faster code.
 
 **SAM 3.1**
 - It is excellent on real photographs — the nameplate was found at 94 % confidence, bonnet bolts individually — and it keeps stable object identities through video.
@@ -247,13 +284,13 @@ Without Docker: `npm start` in `argus` (API + web on :8000) and `scripts/run_ins
 - Pin the rules per inspection: a library edit must never rewrite a past result.
 - Long model calls break default HTTP clients — Node's `fetch` gives up after 300 s without response headers; SAM video tracking takes longer.
 
-## 13. Status, limits and roadmap
+## 14. Status, limits and roadmap
 
 - **Status:** hackathon build, frozen for the demo; all features above are implemented and tested.
 - **Limits:** findings assist a human reviewer — no certification or automatic release; no crack-depth, torque or leak claims from images; photo-to-CAD alignment is not computed; a finding names a part type, so its video hint is drawn on every instance of that part; the two demo stages share one CAD.
 - **Roadmap:** CAD per stage and rules that switch on by stage; component dimension boxes in the 3D viewer (CAD vs scan); estimated photo-to-CAD alignment view; per-instance attribution of findings; requirement-met / not-met answers from the models.
 
-## 14. Repository map and documents
+## 15. Repository map and documents
 
 ```
 argus/
