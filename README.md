@@ -89,16 +89,24 @@ Argus inspects **the same asset again and again as it is built**, each time agai
 
 ## 5. How Argus solves it
 
-Argus inspects against **design intent** instead of training data:
+Argus inspects against **design intent** instead of training data.
+
+![Solution in action: a ceiling-mounted gantry moves a compact camera and laser head around a large valve on the shop floor while an inspector follows the live findings on a tablet](docs/architecture/SolutionInAction.png)
+
+*Concept illustration of the target shop-floor setup. A gantry-mounted camera and laser head travel around the valve at each build stage and stream evidence to Argus, and the inspector follows the findings live. The illustration is not the demo valve, and the nameplate and brand shown are fictional.*
+
+> **In this prototype, the camera feed, photographs and laser point cloud are simulated.** No gantry, camera or scanner hardware is connected. The separate Argus Simulator streams prepared evidence of the demo valve through the same public API a real cell would use: video segments, photographs generated from real imagery, and a simulated 180° laser scan split into point-cloud chunks. Everything downstream of ingestion is the real system: SAM 3.1 part detection, rule routing, Muse screening and review, CAD-to-scan registration, the rule gate and the dossier. Connecting real sensors means pointing them at the same API.
+
+How it works:
 
 1. **Pin what the asset must satisfy.** When an inspection starts, Argus pins the CAD model, the rules from its indexed rule library that apply to this valve type and end connection, and — if the customer's work order is uploaded (PDF, Word or Excel) — the rules printed in that order, quoted verbatim. Nothing is inferred from narrative text. This snapshot never changes for that inspection.
-2. **Take evidence as it arrives.** A camera, a photo station and a laser scanner (here: an independent simulator) stream files to Argus's public API. Each file is stored, hashed and shown immediately.
+2. **Take evidence as it arrives.** A camera, a photo station and a laser scanner stream files to Argus's public API (in this prototype, the Argus Simulator plays that role). Each file is stored, hashed and shown immediately.
 3. **Find the parts in each image — SAM 3.1.** For every photograph and sampled video frame, SAM 3.1 says which valve parts are visible (flange face, nameplate, bonnet bolting, lever, air-cushion cylinder …), with masks and boxes.
 4. **Route only the relevant rules.** A deterministic routing table maps visible parts to the pinned rules about those parts. A flange close-up is checked against flange rules only. Rules that need records the image cannot show (test certificates, measurements) are skipped, or reported as "evidence needed" if they are critical.
 5. **Read the evidence against each rule — Muse Spark, then Muse Wonder.** Muse Spark screens each routed rule on the image, with the work order text when the rule compares against the order; Muse Wonder reviews anything flagged or high-stakes. Both return observations only — never verdicts.
 6. **Measure the geometry — deterministically.** All laser-scan chunks are merged and registered to a reference point cloud derived from the CAD (Open3D ICP). Argus reports surface coverage and RMS / 95th-percentile deviation, and scan rules are decided only against approved thresholds, after a registration-quality gate.
 7. **Decide with a rule gate, not a model.** A deterministic gate turns observations and measurements into PASS / WARNING / FAIL / INSUFFICIENT EVIDENCE per rule. A model timeout is never a pass; a hairline seen in a photo is a warning for review, never a certified failure.
-8. **Close and report.** The operator ends or terminates the inspection; Argus waits for running analysis (or cancels it), freezes the results and writes an HTML dossier with each rule's quote and citation, the evidence and its hashes, the scan metrics and anything left incomplete. Nothing is released automatically.
+8. **Close and report.** The inspection closes automatically once the feed is complete and analysis has finished, or the operator ends or terminates it earlier. Argus waits for running analysis (or cancels it), freezes the results and writes a dossier (PDF, prepared by the report agent, plus HTML) with each rule's quote and citation, the evidence and its hashes, the scan metrics and anything left incomplete. Nothing is released automatically.
 
 Everything runs live: the operator watches findings appear while the evidence is still streaming.
 
@@ -106,12 +114,13 @@ Everything runs live: the operator watches findings appear while the evidence is
 
 - **Home** — every inspection with lifecycle, outcome and a findings bar; inspections of the same work order / asset are grouped and listed in stage order. Start an inspection by name, CAD model and optional work order.
 - **Inspection Rules** — the indexed rule library (161 rules from 19 documents), searchable by stage, section and evidence type.
+- **Summary and recommendation** — once an inspection closes, an AI-generated (Muse Wonder) reasoning summary and recommended action at the top of the page, before the details. Advisory; the engineer decides.
 - **Live inspection** — video, photographs, merged point cloud and CAD reference panes; an evidence timeline; the stage indicator; live findings; the CAD-vs-scan comparison.
 - **Applicable Rules** — the selection funnel (library → valve type → customer specification), every rule with its status, quote, citation and reason, and *Why these rules*.
 - **Documents** — every evidence file, the pinned CAD, the rule snapshot, the uploaded work order and the dossier, each with size, hash and download.
 - **Previous Inspections** — earlier inspections of the same order and asset, and how each rule stood at each stage (reference only).
 - **Viewer dialog** — photographs with SAM 3.1 masks; the video as **Original video** and **Analyzed video** (parts tracked by SAM 3.1 with lightly worded "possible issue" hints from the findings); the merged 3D point cloud and the CAD reference cloud, orbitable.
-- **Dossier / Reports** — the frozen report per inspection, downloadable as HTML.
+- **Dossier / Reports** — the frozen report per inspection, downloadable as PDF.
 
 The companion **Argus Simulator** (separate repository) streams prepared evidence to a chosen inspection, per source in parallel, with retry and stop.
 
@@ -139,11 +148,17 @@ In ETO there is nothing to train on, so the models must work **zero-shot**: find
 | **SAM 3.1 — video** (`sam-3.1`, `input_video`) | Inspection orchestrator, once per inspection | Tracks each relevant part through the merged inspection video with stable object identities (on a 5 fps copy, because video is billed per frame). Powers the **Analyzed video** tab, where possible issues follow the part they concern. Display only. |
 | **Muse Spark 1.3** (`muse-spark-1.3`) | Image and video agents | Tier-1 screening: for each routed rule, reads the image (or video keyframe; the clip for motion rules) against the rule's exact wording, and — when the rule compares against the order — against the uploaded work order text. Returns a structured observation (`component_present / component_absent / possible_surface_line / no_component`, certainty, note). |
 | **Muse Wonder 1.0** (`muse-wonder-1.0`) | Image agent | Tier-2 review of flagged, uncertain or critical items (flange faces, nameplate, bonnet). An additional observation, never a replacement verdict. |
+| **Muse Wonder 1.0 — summary** (`muse-wonder-1.0`) | Inspection orchestrator, once per closed inspection | Reads the frozen results and writes a short reasoning summary with a recommended action (proceed to sign-off, review, hold for rework, or collect more evidence) and up to three next steps. Shown at the top of the completed inspection, labelled AI-generated and advisory; it never changes a rule status. |
 | **Muse Code** | Development | Used by the team as an AI coding assistant while building Argus. Not a runtime dependency. |
 
 What the models never do: issue verdicts, invent tolerances or citations, measure millimetres, or release a product. Those stay with the deterministic rule gate, the geometry code and the human reviewer.
 
 ## 9. Architecture
+
+![Argus continuous industrial inspection architecture: evidence, Node.js API, Python inspection agents with SAM 3.1 and Muse, deterministic rule gate, operator](docs/architecture/argus_architecture_diagram%20v2.png)
+
+<details>
+<summary>Text version (Mermaid)</summary>
 
 ```mermaid
 flowchart TB
@@ -185,10 +200,12 @@ flowchart TB
   API --> DOS
 ```
 
+</details>
+
 - One **API** owns ingestion, sessions, pinned snapshots, the live analysis queue, SSE, closure and dossiers.
 - One **orchestrator** plus three **agent services** (video, image, point cloud), each its own process and container; the orchestrator routes each evidence item to the agent for its media type and runs independent items in parallel.
 - One **deterministic rule gate** issues every verdict.
-- The original v0.9 design diagram is kept at [`docs/architecture/Argus_Architecture_Diagram.png`](docs/architecture/Argus_Architecture_Diagram.png); the current design is described in [Agentic Architecture v1.0](docs/architecture/Argus_Agentic_Architecture.md).
+- The diagram above is the current design; it is described in detail in [Agentic Architecture v1.0](docs/architecture/Argus_Agentic_Architecture.md).
 
 ## 10. Tech stack
 

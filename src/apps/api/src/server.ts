@@ -501,6 +501,25 @@ export async function buildServer() {
   }
 
   /** Dossier PDF via the ReportAgent; stored next to the HTML. */
+  /** Advisory AI summary of a closed inspection (Muse Wonder via the
+   * orchestrator). Reasoning + recommended action for the engineer; it
+   * never changes a verdict and the UI labels it AI-generated. */
+  async function runSummary(insp: any) {
+    if (insp.aiSummary?.status === 'running') return;
+    const d = db.dossiers.find(x => x.sessionId === insp.id);
+    insp.aiSummary = { status: 'running', at: new Date().toISOString() };
+    emit(db, insp.id, 'summary.updated', { status: 'running' }); saveDB(db);
+    try {
+      const out = await postJson(`${INSPECTION_URL}/inspection-summary`, dossierData(insp, !!d?.partial), undefined, Number(process.env.SUMMARY_TIMEOUT_MS || 180000));
+      if (!out?.summary) throw new Error('empty summary');
+      insp.aiSummary = { status: 'ready', summary: out.summary, action: out.action, actionReason: out.actionReason || '', nextSteps: out.nextSteps || [], model: out.model, at: new Date().toISOString() };
+    } catch (e: any) {
+      insp.aiSummary = { status: 'failed', reason: String(e?.message || e).slice(0, 200), at: new Date().toISOString() };
+      logger.info('summary.failed', { sessionId: insp.id, reason: insp.aiSummary.reason });
+    }
+    emit(db, insp.id, 'summary.updated', { status: insp.aiSummary.status }); saveDB(db);
+  }
+
   async function buildDossierPdf(insp: any): Promise<string | null> {
     const d = db.dossiers.find(x => x.sessionId === insp.id); if (!d) return null;
     try {
@@ -659,6 +678,7 @@ export async function buildServer() {
     db.dossiers = db.dossiers.filter(d => d.sessionId !== insp.id);
     db.dossiers.push({ sessionId: insp.id, partial: terminated, outcome: insp.outcome, size: Buffer.byteLength(html), at: insp.closedAt, htmlPath: path.relative(DATA, path.join(dir, `${insp.id}.html`)), sha256: sha256(html) });
     await buildDossierPdf(insp);
+    void runSummary(insp);
     emit(db, insp.id, 'inspection.closed', { lifecycleStatus: insp.lifecycleStatus, outcome: insp.outcome }); emit(db, insp.id, 'dossier.ready', {}); saveDB(db);
     logger.info('inspection.closed', { sessionId: insp.id, lifecycleStatus: insp.lifecycleStatus, outcome: insp.outcome, incomplete: leftover.length });
   }
@@ -974,6 +994,11 @@ export async function buildServer() {
     void finalize(insp, false).catch((e: any) => { insp.finalizeError = String(e?.message || e); emit(db, insp.id, 'inspection.error', { message: insp.finalizeError }); saveDB(db); });
     return reply.code(202).send(insp);
   };
+  app.post('/api/v1/inspections/:id/summary', async (req: any, reply) => {
+    const i = getInsp(req.params.id); if (!i) return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Session not found' } });
+    if (!CLOSED.includes(i.lifecycleStatus)) return reply.code(409).send({ error: { code: 'NOT_CLOSED', message: 'Summary is prepared after the inspection closes' } });
+    void runSummary(i); return reply.code(202).send({ ok: true, status: 'running' });
+  });
   app.post('/api/v1/inspections/:id/close', close(false));
   app.post('/api/v1/inspections/:id/terminate', close(true));
   app.get('/api/v1/inspections/:id/dossier', async (req: any, reply) => { const d = db.dossiers.find((x: any) => x.sessionId === req.params.id); if (!d) return reply.code(404).send({ error: 'no dossier' }); return { ...d, html: fs.readFileSync(dossierFile(d), 'utf8') }; });

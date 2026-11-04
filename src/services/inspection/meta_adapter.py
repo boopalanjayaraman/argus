@@ -88,11 +88,11 @@ def _upload_file(path: str, timeout_s: float) -> str:
         return json.loads(resp.read())["id"]
 
 
-def _call_model(model: str, content: list[dict]) -> str:
+def _call_model(model: str, content: list[dict], instructions: str | None = None, timeout_s: float | None = None) -> str:
     """One Responses call with retries on 429/5xx/network errors."""
-    timeout_s = float(os.environ.get("META_TIMEOUT_MS", "120000")) / 1000.0
+    timeout_s = timeout_s or float(os.environ.get("META_TIMEOUT_MS", "120000")) / 1000.0
     retries = int(os.environ.get("META_MAX_RETRIES", "2"))
-    payload = {"model": model, "instructions": _SYSTEM,
+    payload = {"model": model, "instructions": instructions or _SYSTEM,
                "input": [{"type": "message", "role": "user", "content": content}]}
     last_error = ""
     for attempt in range(retries + 1):
@@ -407,6 +407,61 @@ def track_video(video_path: str, components: list[dict]) -> dict:
         tracked = list(pool.map(one, components))
     return {"status": "ready", "fps": proxy["fps"], "width": proxy["width"], "height": proxy["height"],
             "duration": proxy["duration"], "model": SAM_MODEL, "components": tracked}
+
+
+SUMMARY_MODEL = os.environ.get("META_SUMMARY_MODEL", REVIEW_MODEL)
+SUMMARY_ACTIONS = ("Proceed to sign-off", "Review before sign-off", "Hold for rework", "Collect more evidence")
+_SUMMARY_SYSTEM = (
+    "You assist a quality engineer who must decide what happens next to one engineered-to-order industrial "
+    "asset after an automated inspection. You receive the frozen inspection record: the asset and build stage, "
+    "the customer order, and for each pinned rule its text, the status issued by a deterministic rule gate "
+    "(PASS, WARNING, FAIL, INSUFFICIENT_EVIDENCE, NOT_INSPECTED) and the gate's reason, plus the laser-scan "
+    "comparison with the CAD. Reason about what the results mean together, and write for the engineer:\n"
+    "- Do not recite counts or list every rule. Explain which issues matter most and why, what looks like a "
+    "real nonconformance versus something that needs a closer look, and what could not be checked and whether "
+    "that matters at this stage.\n"
+    "- Never change or contradict a rule's status. Never invent measurements, tolerances, rules, evidence or "
+    "causes. Never state that the asset is certified, accepted or released; a human signs off.\n"
+    "- Plain, calm language. Be brief: lead with the decision-relevant point; name at most a few rule ids, only where they help.\n"
+    "Respond with one JSON object only, no markdown: "
+    '{"summary": "3 or 4 short sentences of reasoning, at most 90 words in total", '
+    '"action": one of "Proceed to sign-off" | "Review before sign-off" | "Hold for rework" | "Collect more evidence", '
+    '"actionReason": "one sentence", '
+    '"nextSteps": ["up to 3 short imperative steps, each naming the rule id it concerns"]}'
+)
+
+
+def _summary_input(d: dict) -> dict:
+    """Slim the dossier to what the reasoning needs (no hashes, short quotes)."""
+    insp, base = d.get("inspection") or {}, d.get("baseline") or {}
+    geo = d.get("geometry") or {}
+    return {
+        "asset": {"name": insp.get("name"), "model": base.get("cadName"), "family": base.get("family"),
+                  "type": base.get("type"), "order": (base.get("order") or {}).get("orderNumber")},
+        "closure": {"status": insp.get("lifecycleStatus"), "partial": insp.get("partial"), "gateOutcome": insp.get("outcome")},
+        "scan": {k: geo.get(k) for k in ("status", "coverage", "fitness", "rmsDeviationMm", "p95DeviationMm", "reason") if geo.get(k) is not None},
+        "rules": [{"id": f.get("ruleId"), "title": f.get("title"), "status": f.get("status"),
+                   "rule": (f.get("quote") or "")[:300], "gateReason": (f.get("reason") or "")[:300]}
+                  for f in d.get("findings") or [] if f.get("status") != "NOT_INSPECTED"],
+        "notInspected": [f.get("ruleId") for f in d.get("findings") or [] if f.get("status") == "NOT_INSPECTED"],
+        "incompleteAnalysis": len(d.get("incomplete") or []),
+    }
+
+
+def summarize_inspection(dossier: dict) -> dict:
+    """Advisory reasoning summary + recommended action (Muse Wonder). It
+    never changes a verdict; the API labels it AI-generated."""
+    if not _configured():
+        raise RuntimeError("Meta model API not configured")
+    payload = json.dumps(_summary_input(dossier), ensure_ascii=False)
+    text = _call_model(SUMMARY_MODEL, [{"type": "input_text", "text": "Inspection record (JSON):\n" + payload}],
+                       instructions=_SUMMARY_SYSTEM, timeout_s=float(os.environ.get("SUMMARY_TIMEOUT_MS", "180000")) / 1000.0)
+    start, end = text.find("{"), text.rfind("}")
+    out = json.loads(text[start:end + 1])
+    action = out.get("action") if out.get("action") in SUMMARY_ACTIONS else "Review before sign-off"
+    steps = [str(x).strip() for x in (out.get("nextSteps") or []) if str(x).strip()][:3]
+    return {"summary": str(out.get("summary") or "").strip(), "action": action,
+            "actionReason": str(out.get("actionReason") or "").strip(), "nextSteps": steps, "model": SUMMARY_MODEL}
 
 
 def warm_up() -> None:

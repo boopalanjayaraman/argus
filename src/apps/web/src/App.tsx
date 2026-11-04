@@ -423,6 +423,26 @@ export default function App() {
           </article>
         </main></div>; })()
         : <div className={`ar-live${closed ? ' closed' : ''}`}>
+          {closed && (() => { const ai = current.aiSummary || null; const tone = ({ 'Proceed to sign-off': ['pass', 'var(--pass)'], 'Review before sign-off': ['warn', 'var(--warn)'], 'Hold for rework': ['fail', 'var(--fail)'], 'Collect more evidence': ['info', 'var(--info)'] } as any)[ai?.action] || ['info', 'var(--info)']; const gen = async () => { await api(`/api/v1/inspections/${current.id}/summary`, { method: 'POST' }); setCurrent({ ...current, aiSummary: { status: 'running' } }); };
+            return <section className="ar-card" aria-label="AI summary and recommendation" style={{ flex: '1 1 100%', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10, borderLeft: `3px solid ${ai?.status === 'ready' ? tone[1] : 'var(--accent)'}`, minWidth: 0 }}>
+              <div className="ar-bar" style={{ justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                <div className="ar-bar" style={{ gap: 8, flexWrap: 'wrap' }}>
+                  <h2 className="ar-h3">Summary and recommendation</h2>
+                  <span className="ar-badge accent">AI-generated · {ai?.model || 'muse-wonder-1.0'}</span>
+                </div>
+                {ai?.status !== 'running' && <button type="button" className="ar-btn ghost sm" onClick={gen}>{ai?.status === 'ready' ? 'Regenerate' : 'Generate summary'}</button>}
+              </div>
+              {ai?.status === 'ready' ? <>
+                <div className="ar-bar" style={{ gap: 10, flexWrap: 'wrap', alignItems: 'baseline' }}>
+                  <span className={`ar-badge ${tone[0]}`} style={{ fontSize: 14 }}>Recommended: {ai.action}</span>
+                  {ai.actionReason && <span className="ar-small" style={{ overflowWrap: 'anywhere' }}>{ai.actionReason}</span>}
+                </div>
+                <p style={{ margin: 0, lineHeight: 1.55, overflowWrap: 'anywhere' }}>{ai.summary}</p>
+                {ai.nextSteps?.length > 0 && <ol style={{ margin: 0, paddingLeft: 20, listStyle: 'decimal', display: 'flex', flexDirection: 'column', gap: 4 }}>{ai.nextSteps.map((t: string, k: number) => <li key={k} className="ar-small" style={{ overflowWrap: 'anywhere' }}>{t}</li>)}</ol>}
+                <span className="ar-micro">Advisory only. Rule statuses below come from the deterministic rule gate; a quality engineer makes the decision and signs off.</span>
+              </> : ai?.status === 'running' ? <span className="ar-small">Muse Wonder is reviewing the inspection results…</span>
+                : <span className="ar-small">{ai?.status === 'failed' ? `The summary could not be prepared (${ai.reason}).` : 'No summary yet for this inspection.'}</span>}
+            </section>; })()}
           {closed && <section aria-label="Inspection statistics" style={{ flex: '1 1 100%', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))', gap: 10 }}>
             {[
               { n: evaluated, k: 'Total findings', c: 'var(--text)' },

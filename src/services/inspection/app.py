@@ -180,6 +180,14 @@ async def dossier_pdf(dossier: dict):
     return Response(content=pdf, media_type="application/pdf")
 
 
+@app.post("/inspection-summary")
+async def inspection_summary(dossier: dict):
+    """Advisory AI summary of a closed inspection (Muse Wonder). Input is the
+    same frozen dossier data the PDF is built from."""
+    import asyncio
+    return await asyncio.to_thread(meta_adapter.summarize_inspection, dossier)
+
+
 @app.post("/warmup")
 def warmup():
     """Fire one tiny SAM 3.1 request so the first real photo of an
